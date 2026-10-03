@@ -5,7 +5,7 @@ import { useActors, type ActorId, type SendResult } from "./actors";
 import { useShiftOwner, useVenue } from "./data";
 import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, parseKey, short, statusOf } from "./solana";
 import { Avatar, Icon, Spinner } from "./ui";
-import { Onboarding, useOnboarding } from "./Onboarding";
+import { Tour, useTour } from "./Tour";
 import Overview from "./pages/Overview";
 import Venue from "./pages/Venue";
 import ShiftView from "./pages/ShiftView";
@@ -29,7 +29,7 @@ interface TxCtx {
   tick: number;
 }
 const Tx = createContext<TxCtx>({ run: async () => null, pending: null, tick: 0 });
-/** Opens the first-visit walkthrough again. */
+/** Starts the guided tour. */
 export const HelpCtx = createContext<() => void>(() => {});
 export const useTx = () => useContext(Tx);
 
@@ -47,7 +47,7 @@ export default function App() {
   const [pending, setPending] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const busy = useRef(false);
-  const tour = useOnboarding();
+  const tour = useTour();
 
   const push = useCallback((t: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
@@ -96,8 +96,8 @@ export default function App() {
 
   return (
     <Tx.Provider value={{ run, pending, tick }}>
-     <HelpCtx.Provider value={tour.show}>
-      {tour.open && route[0] !== "tip" && <Onboarding onClose={tour.close} />}
+     <HelpCtx.Provider value={tour.start}>
+      {tour.open && route[0] !== "tip" && <Tour onClose={tour.close} />}
       {route[0] === "tip" ? (
         <div className="guest-shell">{page}</div>
       ) : (
@@ -167,7 +167,7 @@ function Rail({ section }: { section: "home" | "venue" }) {
         <Icon name="home" size={18} />
         <span className="rail-label">Overview</span>
       </a>
-      <a className={`rail-item ${section === "venue" ? "on" : ""}`} href="#/venue">
+      <a className={`rail-item ${section === "venue" ? "on" : ""}`} href="#/venue" data-tour="nav-venue">
         <Icon name="store" size={18} />
         <span className="rail-label">Venue & shifts</span>
       </a>
@@ -214,9 +214,9 @@ function TopBar({ route, onMenu, browsed }: { route: string[]; onMenu: () => voi
 function HelpButton() {
   const show = useContext(HelpCtx);
   return (
-    <button className="btn ghost help-btn" onClick={show} title="Show the walkthrough again">
-      <Icon name="info" size={14} />
-      <span>How it works</span>
+    <button className="btn help-btn" onClick={show} title="Guided tour: shows what to click">
+      <Icon name="compass" size={14} />
+      <span>Guide</span>
     </button>
   );
 }
@@ -272,7 +272,7 @@ export function SignerMenu({ only, up }: { only?: ActorId[]; up?: boolean }) {
   const list = only ? actors.filter((a) => only.includes(a.id)) : actors;
 
   return (
-    <div className="signer" ref={ref}>
+    <div className="signer" ref={ref} data-tour="signer">
       <button className="signer-btn" onClick={() => setOpen((o) => !o)} title="Who signs the next transaction">
         <Avatar name={active.name} size={20} />
         <span className="signer-name">{active.name}</span>

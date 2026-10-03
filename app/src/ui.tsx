@@ -98,6 +98,17 @@ const PATHS: Record<string, ReactNode> = {
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
     </>
   ),
+  arrowUp: <path d="M12 19V5M5 12l7-7 7 7" />,
+  arrowDown: <path d="M12 5v14M19 12l-7 7-7-7" />,
+  arrowLeft: <path d="M19 12H5M12 19l-7-7 7-7" />,
+  arrowRight: <path d="M5 12h14M12 5l7 7-7 7" />,
+  compass: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m15.5 8.5-2 5-5 2 2-5z" />
+    </>
+  ),
+  pointer: <path d="M4 3l7 17 2.5-7.5L21 10z" />,
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
   terminal: <path d="m4 17 6-6-6-6M12 19h8" />,
   book: (
@@ -182,8 +193,11 @@ export function Panel({
   actions,
   footer,
   flush,
+  tour,
   children,
 }: {
+  /** Anchor for the guided tour. */
+  tour?: string;
   title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -193,7 +207,7 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="panel">
+    <section className="panel" data-tour={tour}>
       {title && (
         <header className="panel-head">
           <div>

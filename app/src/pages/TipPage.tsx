@@ -7,7 +7,7 @@ import { useShift } from "../data";
 import { useInterval, useProgram } from "../hooks";
 import { ata, explorerTx, faucetIxs, fromUnits, ixTip, parseKey, toUnits, tokenBalance, txOf } from "../solana";
 import { Avatar, Icon } from "../ui";
-import { ART } from "../Onboarding";
+import { ART } from "../art";
 
 const PRESETS = [5, 10, 20];
 
@@ -55,7 +55,7 @@ export default function TipPage({ address }: { address: string }) {
     return (
       <TipCard venue={venue?.name}>
         <h1>This shift is closed</h1>
-        <p className="muted">Its tips have already been paid out to the team. Ask your server for today's code.</p>
+        <p className="muted">Already paid out to the team.</p>
       </TipCard>
     );
 
@@ -65,7 +65,7 @@ export default function TipPage({ address }: { address: string }) {
         <img className="tip-art" src={ART.team} alt="" />
         <h1>Thank you</h1>
         <p>
-          Your {done.amount} USDC tip is in the team's pot. It will be shared between {listNames(names)} by the hours they worked.
+          {done.amount} USDC is in the team's pot, shared by hours.
         </p>
         <div className="tip-actions">
           <a className="btn" href={explorerTx(done.sig)} target="_blank" rel="noreferrer">
@@ -135,7 +135,7 @@ export default function TipPage({ address }: { address: string }) {
 
       <p className="fine">
         <Icon name="lock" size={13} />
-        Goes into a shared pot only the team can be paid from. The restaurant can't withdraw it.
+        Only the team can be paid from this pot.
       </p>
 
       <div className="tip-foot">

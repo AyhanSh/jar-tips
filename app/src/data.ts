@@ -24,10 +24,10 @@ export function useVenue(owner: PublicKey | null, tick: number, ms = 12000) {
         return;
       }
       const v = await program.account.venue.fetchNullable(venuePda(owner));
-      setVenue(v);
-      if (!v) return setShifts([]);
-      const keys = Array.from({ length: v.shiftCount.toNumber() }, (_, i) => shiftPda(venuePda(owner), i)).reverse();
+      const keys = v ? Array.from({ length: v.shiftCount.toNumber() }, (_, i) => shiftPda(venuePda(owner), i)).reverse() : [];
       const accs = keys.length ? await program.account.shift.fetchMultiple(keys) : [];
+      // Set both together: a rate-limited second call must not leave a venue with "no shifts".
+      setVenue(v);
       setShifts(keys.map((key, i) => ({ key, acc: accs[i]! })).filter((s) => s.acc));
     },
     ms,
@@ -35,6 +35,9 @@ export function useVenue(owner: PublicKey | null, tick: number, ms = 12000) {
   );
   return { venue, shifts };
 }
+
+/** Shift → owner, filled by useShift so the chrome rarely needs its own request. */
+const ownerCache = new Map<string, PublicKey>();
 
 /** One shift, its venue and the live vault balance. */
 export function useShift(key: PublicKey | null, tick: number) {
@@ -50,6 +53,7 @@ export function useShift(key: PublicKey | null, tick: number) {
       const s = await program.account.shift.fetchNullable(key);
       setShift(s);
       if (!s) return;
+      ownerCache.set(key.toBase58(), s.owner);
       if (venueLoaded.current !== s.venue.toBase58()) {
         venueLoaded.current = s.venue.toBase58();
         setVenue(await program.account.venue.fetchNullable(s.venue));
@@ -62,7 +66,6 @@ export function useShift(key: PublicKey | null, tick: number) {
   return { shift, venue, vault };
 }
 
-const ownerCache = new Map<string, PublicKey>();
 /** The owner of a shift, fetched once, so shared chrome (breadcrumbs, menus) can show that shift's venue. */
 export function useShiftOwner(key: PublicKey | null) {
   const program = useProgram();
@@ -76,7 +79,8 @@ export function useShiftOwner(key: PublicKey | null) {
       if (s) ownerCache.set(key.toBase58(), s.owner);
       setOwner(s?.owner ?? null);
     },
-    60000,
+    // Retries quickly until known (a just-opened shift, or a rate-limited call); cached after that.
+    5000,
     [key?.toBase58()],
   );
   return owner;

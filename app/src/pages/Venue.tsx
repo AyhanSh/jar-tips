@@ -19,7 +19,7 @@ import {
   txOf,
 } from "../solana";
 import { Callout, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Tag } from "../ui";
-import { ART } from "../Onboarding";
+import { ART } from "../art";
 
 const WINDOWS = [
   { secs: 60, label: "1 minute (for demos)" },
@@ -73,9 +73,9 @@ export default function Venue({ creating }: { creating: boolean }) {
     <div className="page">
       <PageHeader
         title={venue.name}
-        description="Your venue's fixed settings and every shift you've opened."
+        description="Your shifts and fixed rules."
         actions={
-          <a className="btn primary" href="#/venue/new">
+          <a className="btn primary" href="#/venue/new" data-tour="new-shift">
             <Icon name="plus" size={14} /> New shift
           </a>
         }
@@ -85,7 +85,7 @@ export default function Venue({ creating }: { creating: boolean }) {
         {shifts.length === 0 ? (
           <div className="empty">
             <img className="empty-art" src={ART.store} alt="" />
-            <p>No shifts yet. Open one to get a tip vault and QR code.</p>
+            <p>No shifts yet.</p>
             <a className="btn" href="#/venue/new">
               New shift
             </a>
@@ -125,7 +125,7 @@ export default function Venue({ creating }: { creating: boolean }) {
         )}
       </Panel>
 
-      <Panel title="Settings" description="Fixed when the venue was created. Nobody can change them.">
+      <Panel title="Rules" description="Fixed forever.">
         <Properties>
           <Prop label="Owner">
             <ExtLink href={explorerAddr(owner.publicKey)}>
@@ -136,15 +136,20 @@ export default function Venue({ creating }: { creating: boolean }) {
           <Prop label="Tip currency">
             USDC <span className="muted">devnet test token</span>
           </Prop>
-          <Prop label="Time to agree">{windowLabel(venue.confirmWindow.toNumber())} after a shift ends</Prop>
+          <Prop label="Time to agree">{windowLabel(venue.confirmWindow.toNumber())}</Prop>
           <Prop label="Shifts opened">{venue.shiftCount.toString()}</Prop>
         </Properties>
       </Panel>
 
-      <Callout icon="lock" title="What the owner can and can't do">
-        You can open shifts, add people to a running shift and end it early. You can't withdraw tips, change anyone's hours, remove
-        anyone or change how the pot is split.
-      </Callout>
+      <div className="rights">
+        <span className="rights-label">Owner</span>
+        <span className="chip yes"><Icon name="check" size={12} /> Open shifts</span>
+        <span className="chip yes"><Icon name="check" size={12} /> Add staff</span>
+        <span className="chip yes"><Icon name="check" size={12} /> End early</span>
+        <span className="chip no"><Icon name="x" size={12} /> Withdraw</span>
+        <span className="chip no"><Icon name="x" size={12} /> Edit hours</span>
+        <span className="chip no"><Icon name="x" size={12} /> Remove staff</span>
+      </div>
     </div>
   );
 }
@@ -163,7 +168,7 @@ function CreateVenue({ owner }: { owner: Actor }) {
         <img src={ART.store} alt="" />
         <div>
           <h1 className="page-title">Create your venue</h1>
-          <p className="page-desc">One time per owner wallet. It records a name and the rules for every shift, and gives you no rights over any tips.</p>
+          <p className="page-desc">Once per owner. No access to tips.</p>
         </div>
       </div>
       <Panel
@@ -173,6 +178,7 @@ function CreateVenue({ owner }: { owner: Actor }) {
             <span className="muted small">Signed by {owner.name}</span>
             <button
               className="btn primary"
+              data-tour="create-venue"
               disabled={!!nameErr || !!pending}
               onClick={() => run("Create venue", async () => send(txOf(await ixCreateVenue(program, owner.publicKey!, name.trim(), win)), { as: owner }))}
             >
@@ -181,10 +187,10 @@ function CreateVenue({ owner }: { owner: Actor }) {
           </>
         }
       >
-        <Field label="Name" hint="Shown to guests on the tip page." error={nameErr}>
+        <Field label="Name" hint="Shown to guests." error={nameErr}>
           <input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label="Time to agree" hint="After a shift ends. If staff don't agree in time, anyone can split the pot equally.">
+        <Field label="Time to agree" hint="Then anyone can split equally.">
           <select value={win} onChange={(e) => setWin(Number(e.target.value))}>
             {WINDOWS.map((w) => (
               <option key={w.secs} value={w.secs}>
@@ -245,12 +251,12 @@ function OpenShift({ owner, nextIndex, venueName }: { owner: Actor; nextIndex: n
 
   return (
     <div className="page narrow">
-      <PageHeader title="New shift" description={`At ${venueName}. Opening it creates the tip vault and a QR code.`} />
+      <PageHeader title="New shift" description={`${venueName} · creates a vault and a QR code`} />
       <Panel title="Shift details">
-        <Field label="Name" hint="For you and the staff, e.g. Friday dinner." error={labelErr}>
+        <Field label="Name" error={labelErr}>
           <input value={label} onChange={(e) => setLabel(e.target.value)} />
         </Field>
-        <Field label="Length" hint="Tipping closes after this. Nobody can claim more hours than this." error={hoursErr}>
+        <Field label="Length" hint="Max hours anyone can claim." error={hoursErr}>
           <div className="input-suffix">
             <input inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value.replace(/[^0-9.]/g, ""))} />
             <span>hours</span>
@@ -260,9 +266,9 @@ function OpenShift({ owner, nextIndex, venueName }: { owner: Actor; nextIndex: n
 
       <Panel
         title="Team"
-        description="Public on-chain. You can add people later but never remove anyone, and you can't add yourself."
+        description="Public. Add-only."
         actions={
-          <button className="btn tiny" onClick={() => setRows(crew.map((a) => ({ name: a.name, wallet: a.publicKey!.toBase58() })))}>
+          <button className="btn tiny" data-tour="demo-crew" onClick={() => setRows(crew.map((a) => ({ name: a.name, wallet: a.publicKey!.toBase58() })))}>
             Use demo crew
           </button>
         }
@@ -276,7 +282,7 @@ function OpenShift({ owner, nextIndex, venueName }: { owner: Actor; nextIndex: n
             <a className="btn" href="#/venue">
               Cancel
             </a>
-            <button className="btn primary" disabled={!valid || !!pending} onClick={open}>
+            <button className="btn primary" data-tour="open-shift" disabled={!valid || !!pending} onClick={open}>
               Open shift
             </button>
           </>

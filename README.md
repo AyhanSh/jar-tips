@@ -167,7 +167,7 @@ app/src/pages/Overview.tsx    how it works + demo wallets
 app/src/pages/Venue.tsx       create venue, open a shift (validated like the program), shift list
 app/src/pages/ShiftView.tsx   shift page: status, team + split, your part (staff/owner), tip QR, activity
 app/src/pages/TipPage.tsx     guest QR tip page (no crypto jargon)
-app/src/Onboarding.tsx        first-visit walkthrough (7 steps), reopened from "How it works"
+app/src/Tour.tsx              guided spotlight tour (13 steps): dims the page, lights the next control
 app/public/icons/             3D illustrations, generated with Higgsfield (GPT Image 2.5)
 app/scripts/e2e-devnet.ts     full flow incl. owner attacks, on devnet
 app/scripts/fund.ts           fund any wallets with devnet SOL + test USDC

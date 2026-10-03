@@ -2,20 +2,20 @@ import { useContext, useState } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useActors } from "../actors";
 import { HelpCtx, useTx } from "../App";
-import { ART } from "../Onboarding";
+import { ART } from "../art";
 import { useInterval } from "../hooks";
-import { PROGRAM_ID, TIP_MINT, balancesOf, explorerAddr, fromUnits, short } from "../solana";
-import { Avatar, CopyButton, ExtLink, Icon, Panel, Prop, Properties } from "../ui";
+import { PROGRAM_ID, balancesOf, explorerAddr, fromUnits, short } from "../solana";
+import { Avatar, CopyButton, ExtLink, Icon, Panel } from "../ui";
 
-const STEPS = [
-  { art: "store", title: "Owner opens a shift", text: "Lists who's working. This creates the vault, and it's the last thing the owner controls." },
-  { art: "phone", title: "Guests tip by QR", text: "Money goes from the guest's wallet straight into the vault. No account, no app." },
-  { art: "clock", title: "Staff enter their hours", text: "Each person sets their own hours and agrees to everyone's. Any change resets agreement." },
-  { art: "split", title: "Anyone pays out", text: "Majority agreed: split by hours. Nobody agreed in time: split equally." },
+const STEPS: { art: keyof typeof ART; title: string; text: string }[] = [
+  { art: "store", title: "Owner opens a shift", text: "Creates the vault" },
+  { art: "phone", title: "Guests tip by QR", text: "Straight into the vault" },
+  { art: "clock", title: "Staff log hours", text: "Most of them agree" },
+  { art: "split", title: "Anyone pays out", text: "Split by hours" },
 ];
 
 export default function Overview() {
-  const showTour = useContext(HelpCtx);
+  const startTour = useContext(HelpCtx);
   return (
     <div className="page">
       <section className="hero">
@@ -23,58 +23,53 @@ export default function Overview() {
         <div className="hero-text">
           <span className="badge tone-green">Live on Solana devnet</span>
           <h1 className="hero-title">Tips the owner can't touch.</h1>
-          <p className="hero-desc">
-            Guests tip by QR into a vault owned by a Solana program, not the restaurant. Staff confirm their own hours, and the program
-            pays everyone their share. There's no withdraw button for the owner, because there's no withdraw instruction at all.
-          </p>
+          <p className="hero-desc">Guests tip into a vault only code controls. Staff get paid by their hours.</p>
           <div className="row gap">
             <a className="btn primary" href="#/venue">
-              Go to venue <Icon name="chevronRight" size={14} />
+              Go to venue <Icon name="arrowRight" size={14} />
             </a>
-            <button className="btn" onClick={showTour}>
-              <Icon name="info" size={14} /> How it works
+            <button className="btn" onClick={startTour}>
+              <Icon name="compass" size={14} /> Guide me
             </button>
           </div>
         </div>
         <img className="hero-art" src={ART.jar} alt="A locked tip jar" />
       </section>
 
-      <div className="cards4">
+      <div className="flow">
         {STEPS.map((s, i) => (
-          <div className="card" key={s.title}>
-            <div className="card-top">
-              <img className="card-art" src={ART[s.art]} alt="" />
+          <div className="flow-step" key={s.title}>
+            <div className="card">
               <span className="card-step">0{i + 1}</span>
+              <img className="card-art" src={ART[s.art]} alt="" />
+              <h3 className="card-title">{s.title}</h3>
+              <p className="card-text">{s.text}</p>
             </div>
-            <h3 className="card-title">{s.title}</h3>
-            <p className="card-text">{s.text}</p>
+            {i < STEPS.length - 1 && (
+              <span className="flow-arrow" aria-hidden="true">
+                <Icon name="arrowRight" size={16} />
+              </span>
+            )}
           </div>
         ))}
       </div>
 
       <DemoWallets />
 
-      <Panel
-        title={
-          <span className="title-art">
-            <img src={ART.shield} alt="" /> Program
-          </span>
-        }
-        description="Every rule above is enforced here. No admin key, no server."
-      >
-        <Properties>
-          <Prop label="Program ID">
-            <span className="mono">{PROGRAM_ID.toBase58()}</span>
-            <CopyButton text={PROGRAM_ID.toBase58()} />
-            <ExtLink href={explorerAddr(PROGRAM_ID)}>Explorer</ExtLink>
-          </Prop>
-          <Prop label="Network">Solana devnet</Prop>
-          <Prop label="Tip token">
-            <span className="mono">{short(TIP_MINT, 6)}</span>
-            <span className="muted">test USDC with a public faucet</span>
-          </Prop>
-        </Properties>
-      </Panel>
+      <div className="program-strip">
+        <img src={ART.shield} alt="" />
+        <span className="muted">Program</span>
+        <span className="mono">{short(PROGRAM_ID, 8)}</span>
+        <CopyButton text={PROGRAM_ID.toBase58()} />
+        <ExtLink href={explorerAddr(PROGRAM_ID)}>Explorer</ExtLink>
+        <span className="spacer" />
+        <span className="chip">
+          <Icon name="lock" size={12} /> No admin key
+        </span>
+        <span className="chip">
+          <Icon name="x" size={12} /> No withdraw
+        </span>
+      </div>
     </div>
   );
 }
@@ -105,52 +100,46 @@ function DemoWallets() {
           <img src={ART.wallets} alt="" /> Demo wallets
         </span>
       }
-      description="One laptop plays every role. Your connected wallet is the owner; the rest live in this browser. Choose who signs from the menu in the top bar."
-      flush
-      footer={
-        <>
-          <span className="muted small">
-            {wallet.publicKey ? "Tops up any wallet under 0.01 SOL and sends the guest 200 test USDC." : "Connect a wallet first."}
-          </span>
-          <button
-            className={`btn ${lowCrew ? "primary" : ""}`}
-            disabled={!wallet.publicKey || !!pending}
-            onClick={() => run("Fund demo wallets", async () => ({ signature: await fundCrew(), failed: false }))}
-          >
-            Fund demo wallets
-          </button>
-        </>
+      description="Every role on one laptop."
+      actions={
+        <button
+          data-tour="fund"
+          className={`btn ${lowCrew ? "primary" : ""}`}
+          disabled={!wallet.publicKey || !!pending}
+          title={wallet.publicKey ? "Tops up low wallets and gives the guest test USDC" : "Connect a wallet first"}
+          onClick={() => run("Fund demo wallets", async () => ({ signature: await fundCrew(), failed: false }))}
+        >
+          <Icon name="coins" size={14} /> Fund
+        </button>
       }
+      flush
     >
-      <table className="grid">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Address</th>
-            <th className="num">SOL</th>
-            <th className="num">USDC</th>
-          </tr>
-        </thead>
-        <tbody>
-          {actors.map((a) => (
-            <tr key={a.id}>
-              <td>
-                <span className="cell-person">
-                  <Avatar name={a.name} />
-                  {a.name}
-                </span>
-              </td>
-              <td className="muted">{a.role}</td>
-              <td className="mono">
-                {a.publicKey ? <ExtLink href={explorerAddr(a.publicKey)}>{short(a.publicKey)}</ExtLink> : <span className="muted">Not connected</span>}
-              </td>
-              <td className="num mono">{bal[a.id] ? bal[a.id].sol.toFixed(3) : "—"}</td>
-              <td className="num mono">{bal[a.id] ? fromUnits(bal[a.id].usdc) : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="people">
+        {actors.map((a) => (
+          <div className="person" key={a.id}>
+            <Avatar name={a.name} size={30} />
+            <div className="person-text">
+              <div className="person-name">{a.name}</div>
+              <div className="person-role">{a.role}</div>
+            </div>
+            <div className="person-bal">
+              {a.publicKey ? (
+                <>
+                  <span className="mono">{bal[a.id] ? fromUnits(bal[a.id].usdc) : "—"}</span>
+                  <small>USDC</small>
+                </>
+              ) : (
+                <span className="muted small">not connected</span>
+              )}
+            </div>
+            {a.publicKey && (
+              <a className="icon-btn small" href={explorerAddr(a.publicKey)} target="_blank" rel="noreferrer" title={a.publicKey.toBase58()}>
+                <Icon name="external" size={12} />
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
     </Panel>
   );
 }

@@ -37,7 +37,7 @@ import {
   type Activity,
   type ShiftAccount,
 } from "../solana";
-import { ART } from "../Onboarding";
+import { ART } from "../art";
 import { Avatar, Callout, CopyButton, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Stat, Tag } from "../ui";
 
 const hm = (minutes: number) => {
@@ -108,7 +108,7 @@ export default function ShiftView({ address }: { address: string }) {
         }
       />
 
-      <div className="stats">
+      <div className="stats" data-tour="stats">
         <Stat icon="coins" label={shift.settled ? "Paid to staff" : "In the vault"} value={<>{fromUnits(pool)} <small>USDC</small></>} sub={`${shift.tipCount} tip${shift.tipCount === 1 ? "" : "s"}`} />
         <Stat icon="users" label="Agreed" value={<>{confirmations(shift)} <small>/ {shift.staff.length}</small></>} sub={`${needed(shift)} needed for a majority`} />
         <Stat icon="clock" label={timing.label} value={timing.value} sub={timing.sub} />
@@ -117,11 +117,7 @@ export default function ShiftView({ address }: { address: string }) {
 
       <PayoutBanner shiftKey={key} shift={shift} now={now} />
 
-      <Panel
-        title="Team"
-        description={shift.settled ? "What each person received." : "Shares update live. Any change to someone's hours resets everyone's agreement."}
-        flush
-      >
+      <Panel tour="team" title="Team" description={shift.settled ? "Paid." : "Live split by hours."} flush>
         <Team shift={shift} shares={shares} phase={phase} />
       </Panel>
 
@@ -129,13 +125,13 @@ export default function ShiftView({ address }: { address: string }) {
 
       <div className="two-col">
         {!shift.settled && <TipLink shiftKey={key} />}
-        <Panel title="Accounts" description="Everything here is public and checkable.">
+        <Panel title="On-chain">
           <Properties>
             <Prop label="Vault">
               <ExtLink href={explorerAddr(vaultOf(key))}>
                 <span className="mono">{short(vaultOf(key), 6)}</span>
               </ExtLink>
-              <span className="muted">only the program can move it</span>
+              <span className="chip"><Icon name="lock" size={11} /> program only</span>
             </Prop>
             <Prop label="Shift">
               <ExtLink href={explorerAddr(key)}>
@@ -170,7 +166,7 @@ function OwnerProp({ shift }: { shift: ShiftAccount }) {
       <ExtLink href={explorerAddr(shift.owner)}>
         <span className="mono">{short(shift.owner, 6)}</span>
       </ExtLink>
-      <span className="muted">holds {bal === null ? "…" : fromUnits(bal)} USDC · no access to the vault</span>
+      <span className="chip no"><Icon name="x" size={11} /> no access</span>
     </Prop>
   );
 }
@@ -203,7 +199,7 @@ function PayoutBanner({ shiftKey, shift, now }: { shiftKey: PublicKey; shift: Sh
         <img src={ART.split} alt="" />
         <div>
           <div className="alert-title">Paid out</div>
-          <p className="alert-text">The vault was emptied straight into each person's wallet and then closed. The owner never held this money.</p>
+          <p className="alert-text">Straight to each wallet. The owner never held it.</p>
         </div>
       </div>
     );
@@ -219,7 +215,7 @@ function PayoutBanner({ shiftKey, shift, now }: { shiftKey: PublicKey; shift: Sh
         </button>
       }
     >
-      Anyone can trigger this, including {active.name}. The program decides who gets what.
+      Anyone can press it. The program decides who gets what.
     </Callout>
   );
 }
@@ -282,14 +278,14 @@ function YourPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shift
   const isOwner = !!active.publicKey?.equals(shift.owner);
   const role = entry ? "staff" : isOwner ? "owner" : "someone outside the team";
   return (
-    <Panel title="Your actions" description={`Signing as ${active.name} (${role}). Switch in the top bar to act as someone else.`} flush>
+    <Panel tour="your-actions" title="Your actions" description={`Signing as ${active.name} · ${role}`} flush>
       {entry && <StaffPart shiftKey={shiftKey} shift={shift} phase={phase} me={active} />}
       {isOwner && <OwnerPart shiftKey={shiftKey} shift={shift} phase={phase} pool={pool} />}
       {!entry && !isOwner && (
         <div className="action-row">
           <div className="action-meta">
-            <div className="action-title">Nothing to do here</div>
-            <p>{active.name} isn't on this team. They can tip, or press Pay out once it's ready.</p>
+            <div className="action-title">Not on this team</div>
+            <p>Can tip, or press Pay out when ready.</p>
           </div>
         </div>
       )}
@@ -317,8 +313,8 @@ function StaffPart({ shiftKey, shift, phase, me }: { shiftKey: PublicKey; shift:
       <div className="action-row">
         <span className={`step-num ${entry.submitted ? "done" : ""}`}>{entry.submitted ? <Icon name="check" size={12} /> : "1"}</span>
         <div className="action-meta">
-          <div className="action-title">Enter the hours you worked</div>
-          <p>Only you can set your hours, up to {hm(shift.scheduledMinutes)}.</p>
+          <div className="action-title">Your hours</div>
+          <p>Only yours · max {hm(shift.scheduledMinutes)}</p>
           {tooMany && <em className="field-err">The shift was only {hm(shift.scheduledMinutes)}</em>}
         </div>
         <div className="action-control">
@@ -338,13 +334,9 @@ function StaffPart({ shiftKey, shift, phase, me }: { shiftKey: PublicKey; shift:
       <div className="action-row">
         <span className={`step-num ${agreed ? "done" : ""}`}>{agreed ? <Icon name="check" size={12} /> : "2"}</span>
         <div className="action-meta">
-          <div className="action-title">Agree with everyone's hours</div>
+          <div className="action-title">Agree to everyone's hours</div>
           <p>
-            {phase === "open"
-              ? "Available once the shift is over."
-              : agreed
-                ? "You agreed. If anyone changes their hours, you'll be asked again."
-                : "Check the team table. You're agreeing to these exact numbers."}
+            {phase === "open" ? "After the shift ends." : agreed ? "Done. Any change asks again." : "Check the table first."}
           </p>
         </div>
         <div className="action-control">
@@ -403,8 +395,8 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
         <>
           <div className="action-row">
             <div className="action-meta">
-              <div className="action-title">End the shift now</div>
-              <p>Moves the end time earlier. Tips can still come in until payout.</p>
+              <div className="action-title">End shift now</div>
+              <p>Tips still welcome until payout.</p>
             </div>
             <div className="action-control">
               <button className="btn" disabled={!!pending} onClick={() => run("End shift", async () => send(txOf(await ixEndShift(program, owner, shiftKey))))}>
@@ -414,8 +406,8 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
           </div>
           <div className="action-row">
             <div className="action-meta">
-              <div className="action-title">Add someone covering</div>
-              <p>Adding resets everyone's agreement. Nobody can ever be removed.</p>
+              <div className="action-title">Add someone</div>
+              <p>Add-only. Nobody can be removed.</p>
               {addErr && <em className="field-err">{addErr}</em>}
             </div>
             <div className="action-control wide">
@@ -441,14 +433,11 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
           </div>
         </>
       )}
-      <div className="action-row danger-zone">
+      <div className="action-row danger-zone" data-tour="security">
         <img className="row-art" src={ART.shield} alt="" />
         <div className="action-meta">
-          <div className="action-title">Security test: try to take the tips</div>
-          <p>
-            Real transactions sent as the owner. They skip the wallet's safety check, reach devnet and fail there. Open them on Explorer
-            from the notification.
-          </p>
+          <div className="action-title">Try to steal the tips</div>
+          <p>Real transactions. Solana rejects both.</p>
         </div>
         <div className="action-control stack">
           <button className="btn danger" disabled={!!pending} onClick={rawWithdraw}>
@@ -470,7 +459,7 @@ function TipLink({ shiftKey }: { shiftKey: PublicKey }) {
     QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: "#171717", light: "#ffffff" } }).then(setSrc);
   }, [url]);
   return (
-    <Panel title="Tip link" description="Print it on the bill or put it on the table.">
+    <Panel tour="tip-link" title="Tip QR" description="Print it on the bill.">
       <div className="qr-block">
         {src && <img src={src} alt="QR code for the guest tip page" />}
         <div className="qr-side">
@@ -506,7 +495,7 @@ function ActivityFeed({ shiftKey }: { shiftKey: PublicKey }) {
     [shiftKey.toBase58(), tick],
   );
   return (
-    <Panel title="Activity" description="Transactions that touched this shift or its vault, newest first." flush>
+    <Panel title="Activity" flush>
       {items === null ? (
         <div className="empty small">Loading from devnet…</div>
       ) : (
