@@ -76,7 +76,7 @@ export default function Overview() {
 
 function DemoWallets() {
   const { connection } = useConnection();
-  const { actors, fundCrew } = useActors();
+  const { actors, visible, fundCrew } = useActors();
   const { run, pending, tick } = useTx();
   const [bal, setBal] = useState<Record<string, { sol: number; usdc: bigint }>>({});
 
@@ -97,10 +97,10 @@ function DemoWallets() {
     <Panel
       title={
         <span className="title-art">
-          <img src={ART.wallets} alt="" /> Demo wallets
+          <img src={ART.wallets} alt="" /> Who's who
         </span>
       }
-      description="Every role on one laptop."
+      description="Owner, staff and a guest, all on this laptop. Shift pages show a button for each of them."
       actions={
         <button
           data-tour="fund"
@@ -115,7 +115,7 @@ function DemoWallets() {
       flush
     >
       <div className="people">
-        {actors.map((a) => (
+        {visible.map((a) => (
           <div className="person" key={a.id}>
             <Avatar name={a.name} size={30} />
             <div className="person-text">

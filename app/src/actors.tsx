@@ -26,10 +26,10 @@ export interface SendResult {
 }
 
 const DEMO: { id: Exclude<ActorId, "wallet">; name: string; role: string }[] = [
-  { id: "owner", name: "Demo owner", role: "Owner (backup)" },
-  { id: "ana", name: "Ana", role: "Waiter" },
-  { id: "ben", name: "Ben", role: "Bartender" },
-  { id: "kasia", name: "Kasia", role: "Runner" },
+  { id: "owner", name: "Demo owner", role: "Owner · no wallet needed" },
+  { id: "ana", name: "Ana", role: "Staff · waiter" },
+  { id: "ben", name: "Ben", role: "Staff · bartender" },
+  { id: "kasia", name: "Kasia", role: "Staff · runner" },
   { id: "guest", name: "Guest", role: "Customer" },
 ];
 
@@ -48,20 +48,21 @@ const PRIORITY_FEE = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 2
  */
 async function sendAndConfirmRaw(
   connection: Connection,
-  raw: Buffer | Uint8Array,
+  raw: Buffer | Uint8Array | null,
   signature: string,
   lastValidBlockHeight: number,
   skipPreflight: boolean,
 ): Promise<unknown> {
   // First send with preflight (unless asked not to) so simulation errors surface immediately.
-  await retry429(() => connection.sendRawTransaction(raw, { skipPreflight, maxRetries: 0 }));
+  // raw = null: the wallet already sent it; only watch for confirmation.
+  if (raw) await retry429(() => connection.sendRawTransaction(raw, { skipPreflight, maxRetries: 0 }));
   for (let i = 0; ; i++) {
     await sleep(2000);
     try {
       const st = (await connection.getSignatureStatuses([signature])).value[0];
       if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return st.err;
       if (i % 3 === 2 && (await connection.getBlockHeight("confirmed")) > lastValidBlockHeight) break;
-      connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
+      if (raw) connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
     } catch {
       /* rate-limited: keep trying until the blockhash expires */
     }
@@ -106,6 +107,8 @@ function loadDemoKeys(): Record<string, Keypair> {
 
 interface Ctx {
   actors: Actor[];
+  /** The identities to offer in pickers: the demo owner only when no wallet is connected. */
+  visible: Actor[];
   active: Actor;
   setActive: (id: ActorId) => void;
   actorFor: (pk: PublicKey) => Actor | undefined;
@@ -154,12 +157,13 @@ export function ActorProvider({ children }: { children: ReactNode }) {
 
   const actors: Actor[] = useMemo(
     () => [
-      { id: "wallet", name: "My wallet", role: "Owner", publicKey: wallet.publicKey },
+      { id: "wallet", name: "You", role: "Owner · your wallet", publicKey: wallet.publicKey },
       ...DEMO.map((d) => ({ ...d, publicKey: keys[d.id].publicKey, keypair: keys[d.id] })),
     ],
     [wallet.publicKey, keys],
   );
   const active = actors.find((a) => a.id === activeId) ?? actors[0];
+  const visible = actors.filter((a) => a.id !== "owner" || !wallet.publicKey || activeId === "owner");
   const owner = actors.find((a) => a.id === ownerId) ?? actors[0];
   const actorFor = useCallback(
     (pk: PublicKey) => actors.find((a) => a.publicKey?.equals(pk)),
@@ -176,22 +180,19 @@ export function ActorProvider({ children }: { children: ReactNode }) {
       tx.recentBlockhash = latest.blockhash;
       tx.feePayer = who.publicKey;
 
-      let signed: Transaction;
+      let signature: string;
+      let raw: Buffer | null = null;
       if (who.keypair) {
+        // Demo keypairs: the app signs and keeps re-broadcasting until it lands.
         tx.sign(who.keypair, ...(opts.signers ?? []));
-        signed = tx;
-      } else if (wallet.signTransaction) {
-        // The wallet only signs; this app broadcasts through its own devnet connection, so the
-        // network Phantom happens to be on doesn't matter and a dropped send gets retried.
-        signed = await wallet.signTransaction(tx);
-        if (opts.signers?.length) signed.partialSign(...opts.signers);
+        raw = tx.serialize();
+        signature = utils.bytes.bs58.encode(tx.signature!);
       } else {
-        const signature = await wallet.sendTransaction(tx, connection, { signers: opts.signers, skipPreflight });
-        const st = await connection.confirmTransaction({ signature, ...latest }, "confirmed");
-        return st.value.err ? { signature, failed: true, reason: "Transaction failed on-chain" } : { signature, failed: false };
+        // Browser wallets: Phantom's recommended signAndSendTransaction. Sign-only requests from
+        // unknown sites get extra security warnings. The app still watches for confirmation itself.
+        signature = await wallet.sendTransaction(tx, connection, { signers: opts.signers, skipPreflight, maxRetries: 10 });
       }
-      const signature = utils.bytes.bs58.encode(signed.signature!);
-      const err = await sendAndConfirmRaw(connection, signed.serialize(), signature, latest.lastValidBlockHeight, skipPreflight);
+      const err = await sendAndConfirmRaw(connection, raw, signature, latest.lastValidBlockHeight, skipPreflight);
       if (!err) return { signature, failed: false };
       let logs: string[] | null | undefined;
       for (let i = 0; i < 5 && !logs; i++) {
@@ -226,6 +227,6 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   }, [wallet.publicKey, connection, keys, send, actors]);
 
   return (
-    <ActorCtx.Provider value={{ actors, active, setActive, actorFor, owner, send, fundCrew }}>{children}</ActorCtx.Provider>
+    <ActorCtx.Provider value={{ actors, visible, active, setActive, actorFor, owner, send, fundCrew }}>{children}</ActorCtx.Provider>
   );
 }

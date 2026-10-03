@@ -23,7 +23,7 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { art: "jar", title: "Tips the owner can't touch", text: "A 60-second walk through one shift. Follow the light." },
+  { art: "jar", title: "Tips the owner can't touch", text: "A 60-second walk through a sample shift. Follow the light. Nothing is sent." },
   { target: '[data-tour="signer"]', art: "wallets", title: "Who's acting", text: "Owner, staff or guest. Switch here any time." },
   { target: '[data-tour="nav-venue"]', art: "store", title: "Your venue", text: "Open it.", action: "click" },
   { target: '[data-tour="create-venue"]', art: "store", title: "Create the venue", text: "Once per owner. Gives no access to tips.", action: "click", optional: true, wait: 1500 },
@@ -33,9 +33,10 @@ const STEPS: Step[] = [
   { target: '[data-tour="stats"]', art: "split", title: "Live shift", text: "Vault, agreement and time, straight from the chain.", wait: 90000 },
   { target: '[data-tour="tip-link"]', art: "phone", title: "Guests tip here", text: "Scan or open. Money goes straight into the vault." },
   { target: '[data-tour="team"]', art: "split", title: "Fair split", text: "Shares follow the hours, live." },
-  { target: '[data-tour="your-actions"]', art: "clock", title: "Your buttons", text: "Sign as Ana, Ben or Kasia: enter hours, press I agree." },
-  { target: '[data-tour="security"]', art: "shield", title: "Try to steal", text: "As owner, both attempts reach Solana and fail.", optional: true, wait: 1500 },
+  { target: '[data-tour="your-actions"]', art: "clock", title: "What happens next", text: "Four steps. Each button names who it acts as: Save as Ana, Ben agrees, Pay out." },
+  { target: '[data-tour="security"]', art: "shield", title: "Try to steal", text: "Owner tools: both theft attempts reach Solana and fail.", optional: true, wait: 1500 },
   { art: "split", title: "Pay out", text: "When most agree, Pay out appears. Anyone can press it." },
+  { art: "store", title: "Your turn", text: "That was sample data. Now create your own venue and run a real shift." },
 ];
 
 export function useTour() {
@@ -242,7 +243,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
             </button>
           )}
           <button className="btn primary tiny" onClick={missing ? () => go(i + 1) : next}>
-            {last ? "Done" : step.action === "click" && !centered ? "Do it" : "Next"}
+            {last ? "Start for real" : step.action === "click" && !centered ? "Do it" : "Next"}
             {!last && <Icon name="arrowRight" size={12} />}
           </button>
         </div>

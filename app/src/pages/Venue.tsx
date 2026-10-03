@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from "react";
+import { useContext, useState, type ReactNode } from "react";
+import { DEMO_SHIFT, DemoMode } from "../demo";
 import { PublicKey } from "@solana/web3.js";
 import { useActors, type Actor } from "../actors";
 import { useTx } from "../App";
@@ -49,8 +50,9 @@ export default function Venue({ creating }: { creating: boolean }) {
   const { tick } = useTx();
   const now = useChainNow();
   const { venue, shifts } = useVenue(owner.publicKey, tick);
+  const demo = useContext(DemoMode);
 
-  if (!owner.publicKey)
+  if (!owner.publicKey && !demo)
     return (
       <div className="page">
         <PageHeader title="Venue" description="Register a venue and open shifts." />
@@ -128,8 +130,8 @@ export default function Venue({ creating }: { creating: boolean }) {
       <Panel title="Rules" description="Fixed forever.">
         <Properties>
           <Prop label="Owner">
-            <ExtLink href={explorerAddr(owner.publicKey)}>
-              <span className="mono">{short(owner.publicKey, 6)}</span>
+            <ExtLink href={explorerAddr(venue.owner)}>
+              <span className="mono">{short(venue.owner, 6)}</span>
             </ExtLink>
             <span className="muted">{owner.name}</span>
           </Prop>
@@ -234,8 +236,11 @@ function OpenShift({ owner, nextIndex, venueName }: { owner: Actor; nextIndex: n
   const valid = rows.length > 0 && rowErr.every((e) => !e) && !hoursErr && !labelErr;
   const set = (i: number, patch: Partial<Row>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 
-  const open = () =>
-    run("Open shift", async () => {
+  const demo = useContext(DemoMode);
+  const open = () => {
+    // During the guide, jump to the sample shift instead of sending a transaction.
+    if (demo) return void (window.location.hash = `/shift/${DEMO_SHIFT.toBase58()}`);
+    return run("Open shift", async () => {
       const { ix, shift } = await ixOpenShift(
         program,
         owner.publicKey!,
@@ -248,6 +253,7 @@ function OpenShift({ owner, nextIndex, venueName }: { owner: Actor; nextIndex: n
       if (!r.failed) window.location.hash = `/shift/${shift.toBase58()}`;
       return r;
     });
+  };
 
   return (
     <div className="page narrow">

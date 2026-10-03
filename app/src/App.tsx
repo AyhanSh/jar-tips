@@ -6,6 +6,7 @@ import { useShiftOwner, useVenue } from "./data";
 import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, parseKey, short, statusOf } from "./solana";
 import { Avatar, Icon, Spinner } from "./ui";
 import { Tour, useTour } from "./Tour";
+import { DEMO_SHIFT, DemoMode } from "./demo";
 import Overview from "./pages/Overview";
 import Venue from "./pages/Venue";
 import ShiftView from "./pages/ShiftView";
@@ -16,7 +17,7 @@ import TipPage from "./pages/TipPage";
 // ---------------------------------------------------------------------------
 interface Toast {
   id: number;
-  kind: "ok" | "err" | "info" | "blocked";
+  kind: "ok" | "err" | "info" | "blocked" | "demo";
   text: string;
   sig?: string;
 }
@@ -38,6 +39,7 @@ const TOAST_TITLE: Record<Toast["kind"], string> = {
   ok: "Transaction confirmed",
   err: "Transaction failed",
   blocked: "Blocked by the program",
+  demo: "Guide demo",
 };
 
 export default function App() {
@@ -48,6 +50,14 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const busy = useRef(false);
   const tour = useTour();
+  const demo = useRef(false);
+  demo.current = tour.open;
+  // Leaving the guide: drop the sample data and start from the real (possibly empty) venue.
+  const endTour = useCallback(() => {
+    tour.close();
+    if (window.location.hash.includes(DEMO_SHIFT.toBase58()) || /^#\/shift\//.test(window.location.hash) || /^#\/venue/.test(window.location.hash))
+      window.location.hash = "/venue";
+  }, [tour]);
 
   const push = useCallback((t: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
@@ -58,6 +68,11 @@ export default function App() {
   const run = useCallback<Run>(
     async (label, fn, opts = {}) => {
       if (busy.current) return null;
+      if (demo.current) {
+        // The guide shows sample data: explain what would happen instead of sending anything.
+        push({ kind: "demo", text: opts.expectFail ? `${label}: on-chain this is rejected by the program.` : `${label}: nothing was sent. Do it for real after the guide.` });
+        return null;
+      }
       busy.current = true;
       setPending(label);
       push({ kind: "info", text: label });
@@ -97,7 +112,15 @@ export default function App() {
   return (
     <Tx.Provider value={{ run, pending, tick }}>
      <HelpCtx.Provider value={tour.start}>
-      {tour.open && route[0] !== "tip" && <Tour onClose={tour.close} />}
+     <DemoMode.Provider value={tour.open && route[0] !== "tip"}>
+      {tour.open && route[0] !== "tip" && (
+        <>
+          <Tour onClose={endTour} />
+          <div className="demo-ribbon">
+            <Icon name="compass" size={13} /> Guide demo · sample data · nothing is sent
+          </div>
+        </>
+      )}
       {route[0] === "tip" ? (
         <div className="guest-shell">{page}</div>
       ) : (
@@ -113,7 +136,11 @@ export default function App() {
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             <span className="toast-icon">
-              {t.kind === "info" ? <Spinner /> : <Icon name={t.kind === "ok" ? "check" : t.kind === "blocked" ? "shield" : "alert"} size={15} />}
+              {t.kind === "info" ? (
+                <Spinner />
+              ) : (
+                <Icon name={t.kind === "ok" ? "check" : t.kind === "blocked" ? "shield" : t.kind === "demo" ? "compass" : "alert"} size={15} />
+              )}
             </span>
             <div className="toast-body">
               <div className="toast-title">{TOAST_TITLE[t.kind]}</div>
@@ -127,6 +154,7 @@ export default function App() {
           </div>
         ))}
       </div>
+     </DemoMode.Provider>
      </HelpCtx.Provider>
     </Tx.Provider>
   );
@@ -261,7 +289,7 @@ function SubMenu({ route, browsed }: { route: string[]; browsed: Browsed }) {
 
 /** Who signs the next transaction. */
 export function SignerMenu({ only, up }: { only?: ActorId[]; up?: boolean }) {
-  const { actors, active, setActive } = useActors();
+  const { visible: actors, active, setActive } = useActors();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -281,7 +309,7 @@ export function SignerMenu({ only, up }: { only?: ActorId[]; up?: boolean }) {
       </button>
       {open && (
         <div className={`menu ${up ? "up" : ""}`}>
-          <div className="menu-label">Sign transactions as</div>
+          <div className="menu-label">Act as</div>
           {list.map((a) => (
             <button
               key={a.id}

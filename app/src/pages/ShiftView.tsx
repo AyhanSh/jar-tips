@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { DEMO_SHIFT, DemoMode, demoActivity } from "../demo";
+import { useDemoPeople } from "../data";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import QRCode from "qrcode";
@@ -118,11 +120,14 @@ export default function ShiftView({ address }: { address: string }) {
 
       <PayoutBanner shiftKey={key} shift={shift} now={now} />
 
+      {!shift.settled && <ShiftSteps shiftKey={key} shift={shift} phase={phase} pool={pool} now={now} />}
+
+
       <Panel tour="team" title="Team" description={shift.settled ? "Paid." : "Live split by hours."} flush>
         <Team shift={shift} shares={shares} phase={phase} />
       </Panel>
 
-      {!shift.settled && <YourPart shiftKey={key} shift={shift} phase={phase} pool={pool} />}
+      {!shift.settled && <OwnerTools shiftKey={key} shift={shift} phase={phase} pool={pool} />}
 
       {!shift.settled && <TipLink shiftKey={key} />}
 
@@ -173,52 +178,33 @@ function OwnerProp({ shift }: { shift: ShiftAccount }) {
   );
 }
 
-/** Pays out: first creates any missing staff token accounts, then calls `settle`. */
+/** Pays out as `as`: first creates any missing staff token accounts, then calls `settle`. */
 function usePayout(shiftKey: PublicKey, shift: ShiftAccount) {
   const program = useProgram();
   const { connection } = useConnection();
-  const { send, active } = useActors();
+  const { send } = useActors();
   const { run } = useTx();
-  return () =>
-    run("Pay out", async (): Promise<SendResult> => {
-      const caller = active.publicKey!;
+  return (as: Actor) =>
+    run(`Pay out (by ${as.name})`, async (): Promise<SendResult> => {
+      const caller = as.publicKey!;
       for (const chunk of await missingAtaIxs(connection, caller, shift.staff.map((s) => s.wallet))) {
-        const r = await send(txOf(...chunk));
+        const r = await send(txOf(...chunk), { as });
         if (r.failed) return r;
       }
-      return send(txOf(await ixSettle(program, caller, shiftKey, shift)));
+      return send(txOf(await ixSettle(program, caller, shiftKey, shift)), { as });
     });
 }
 
-function PayoutBanner({ shiftKey, shift, now }: { shiftKey: PublicKey; shift: ShiftAccount; now: number }) {
-  const { active } = useActors();
-  const { pending } = useTx();
-  const payout = usePayout(shiftKey, shift);
-
-  if (shift.settled)
-    return (
-      <div className="success-card">
-        <img src={ART.split} alt="" />
-        <div>
-          <div className="alert-title">Paid out</div>
-          <p className="alert-text">Straight to each wallet. The owner never held it.</p>
-        </div>
-      </div>
-    );
-  if (!canSettle(shift, now)) return null;
+function PayoutBanner({ shift }: { shiftKey: PublicKey; shift: ShiftAccount; now: number }) {
+  if (!shift.settled) return null;
   return (
-    <Callout
-      icon="coins"
-      tone="green"
-      title={hasMajority(shift) ? "Ready to pay out, split by hours" : "Ready to pay out, split equally"}
-      action={
-        <button className="btn primary" disabled={!!pending || !active.publicKey} onClick={payout}>
-          Pay out now
-        </button>
-      }
-    >
-      Anyone can press it. The program decides who gets what.
-    </Callout>
+    <div className="success-card">
+      <img src={ART.split} alt="" />
+      <div>
+        <div className="alert-title">Paid out</div>
+        <p className="alert-text">Straight to each wallet. The owner never held it.</p>
+      </div>
+    </div>
   );
 }
 
@@ -274,94 +260,223 @@ function Team({ shift, shares, phase }: { shift: ShiftAccount; shares: bigint[];
   );
 }
 
-function YourPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint }) {
-  const { active } = useActors();
-  const entry = shift.staff.find((s) => active.publicKey && s.wallet.equals(active.publicKey));
-  const isOwner = !!active.publicKey?.equals(shift.owner);
-  const role = entry ? "staff" : isOwner ? "owner" : "someone outside the team";
+/** A signer this browser can use for `wallet`: a demo keypair or the connected wallet. */
+function useSignerFor() {
+  const { actorFor } = useActors();
+  return (wallet: PublicKey) => {
+    const a = actorFor(wallet);
+    return a && a.publicKey && (a.keypair || a.id === "wallet") ? a : undefined;
+  };
+}
+
+type StepState = "done" | "current" | "todo";
+
+function Step({
+  n,
+  state,
+  title,
+  who,
+  hint,
+  children,
+}: {
+  n: number;
+  state: StepState;
+  title: string;
+  who: React.ReactNode;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <Panel tour="your-actions" title="Your actions" description={`Signing as ${active.name} · ${role}`} flush>
-      {entry && <StaffPart shiftKey={shiftKey} shift={shift} phase={phase} me={active} />}
-      {isOwner && <OwnerPart shiftKey={shiftKey} shift={shift} phase={phase} pool={pool} />}
-      {!entry && !isOwner && (
-        <div className="action-row">
-          <div className="action-meta">
-            <div className="action-title">Not on this team</div>
-            <p>Can tip, or press Pay out when ready.</p>
+    <section className={`flow-stage ${state}`}>
+      <header className="stage-head">
+        <span className="stage-num">{state === "done" ? <Icon name="check" size={13} /> : n}</span>
+        <div className="stage-titles">
+          <div className="stage-title">
+            {title}
+            {state === "current" && <Tag tone="green">now</Tag>}
           </div>
+          {hint && <div className="stage-hint">{hint}</div>}
         </div>
-      )}
+        <div className="stage-who">{who}</div>
+      </header>
+      <div className="stage-body">{children}</div>
+    </section>
+  );
+}
+
+const Who = ({ names, label }: { names: string[]; label: string }) => (
+  <span className="who">
+    <span className="faces">
+      {names.slice(0, 4).map((n) => (
+        <Avatar key={n} name={n} size={20} />
+      ))}
+    </span>
+    {label}
+  </span>
+);
+
+/** The whole shift as four steps. Every button says who it acts as, so nobody has to switch identities. */
+function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint; now: number }) {
+  const program = useProgram();
+  const { send, actors, setActive } = useActors();
+  const { run, pending } = useTx();
+  const signerFor = useSignerFor();
+  const payout = usePayout(shiftKey, shift);
+  const [hours, setHours] = useState<Record<string, string>>({});
+  const owner = signerFor(shift.owner);
+  const guest = actors.find((a) => a.id === "guest")!;
+  const open = phase === "open";
+  const ready = canSettle(shift, now);
+  const current = open ? 1 : ready ? 4 : shift.staff.some((s) => !s.submitted) ? 2 : 3;
+  const state = (n: number): StepState => (n < current ? "done" : n === current ? "current" : "todo");
+  const agreed = confirmations(shift);
+  const preview = previewShares(shift, pool, !hasMajority(shift) && phase === "fallback");
+  // Pay out is open to anyone: use the owner if this browser has them, else the guest.
+  const payer = owner ?? guest;
+
+  return (
+    <Panel tour="your-actions" title="What happens next" description="Four steps. Each button acts as the person shown on it." flush>
+      <div className="stepper">
+        {["Collect tips", "Enter hours", "Agree", "Pay out"].map((t, i) => (
+          <span key={t} className={`stepper-item ${state(i + 1)}`}>
+            <b>{state(i + 1) === "done" ? <Icon name="check" size={11} /> : i + 1}</b>
+            {t}
+          </span>
+        ))}
+      </div>
+
+      <Step n={1} state={state(1)} title="Collect tips" who={<Who names={["Guest"]} label="Guests" />} hint={`${shift.tipCount} tips · ${fromUnits(pool)} USDC in the vault`}>
+        <div className="stage-actions">
+          <button
+            className="btn"
+            onClick={() => {
+              setActive("guest");
+              window.location.hash = `/tip/${shiftKey.toBase58()}`;
+            }}
+          >
+            <Avatar name="Guest" size={16} /> Tip as Guest
+          </button>
+          <span className="spacer" />
+          {open && (
+            <button
+              className="btn"
+              disabled={!owner || !!pending}
+              title={owner ? "" : "Only the owner can end the shift"}
+              onClick={() => run("Owner ends the shift", async () => send(txOf(await ixEndShift(program, owner!.publicKey!, shiftKey)), { as: owner }))}
+            >
+              <Avatar name={owner?.name ?? "Owner"} size={16} /> End shift (owner)
+            </button>
+          )}
+        </div>
+      </Step>
+
+      <Step n={2} state={state(2)} title="Enter hours" who={<Who names={shift.staff.map((s) => s.name)} label="Each person, only their own" />} hint={`Max ${hm(shift.scheduledMinutes)} each`}>
+        {shift.staff.map((s) => {
+          const me = signerFor(s.wallet);
+          const id = s.wallet.toBase58();
+          const value = hours[id] ?? String((s.submitted ? s.minutes : shift.scheduledMinutes) / 60);
+          const minutes = Math.round(Number(value) * 60);
+          const bad = value === "" || !(Number(value) >= 0) || minutes > shift.scheduledMinutes;
+          const same = s.submitted && minutes === s.minutes;
+          return (
+            <div className="person-row" key={id}>
+              <span className="cell-person">
+                <Avatar name={s.name} /> {s.name}
+              </span>
+              <span className="person-state">{s.submitted ? <Tag tone="green">{hm(s.minutes)}</Tag> : <span className="muted small">not entered</span>}</span>
+              {me ? (
+                <span className="person-act">
+                  <span className="input-suffix small">
+                    <input inputMode="decimal" value={value} onChange={(e) => setHours({ ...hours, [id]: e.target.value.replace(/[^0-9.]/g, "") })} />
+                    <span>h</span>
+                  </span>
+                  <button
+                    className="btn"
+                    disabled={bad || same || !!pending}
+                    onClick={() => run(`${s.name} saves hours`, async () => send(txOf(await ixSubmitHours(program, s.wallet, shiftKey, minutes)), { as: me }))}
+                  >
+                    Save as {s.name}
+                  </button>
+                </span>
+              ) : (
+                <span className="muted small">Waiting for {s.name} to sign</span>
+              )}
+            </div>
+          );
+        })}
+      </Step>
+
+      <Step
+        n={3}
+        state={state(3)}
+        title="Agree on everyone's hours"
+        who={<Who names={shift.staff.map((s) => s.name)} label={`${agreed} of ${shift.staff.length} · ${needed(shift)} needed`} />}
+        hint={open ? "Opens when the shift ends" : "Any change to the hours resets agreement"}
+      >
+        {shift.staff.map((s) => {
+          const me = signerFor(s.wallet);
+          const ok = s.confirmedVersion === shift.version;
+          return (
+            <div className="person-row" key={s.wallet.toBase58()}>
+              <span className="cell-person">
+                <Avatar name={s.name} /> {s.name}
+              </span>
+              <span className="person-state">
+                {ok ? <Tag tone="green"><Icon name="check" size={11} /> agreed</Tag> : s.confirmedVersion > 0 ? <Tag tone="yellow">re-check</Tag> : <span className="muted small">not yet</span>}
+              </span>
+              {me ? (
+                <button
+                  className="btn primary"
+                  disabled={open || ok || !!pending}
+                  onClick={() => run(`${s.name} agrees`, async () => send(txOf(await ixConfirm(program, s.wallet, shiftKey, shift.version)), { as: me }))}
+                >
+                  {s.name} agrees
+                </button>
+              ) : (
+                <span className="muted small">Waiting for {s.name}</span>
+              )}
+            </div>
+          );
+        })}
+      </Step>
+
+      <Step
+        n={4}
+        state={state(4)}
+        title="Pay out"
+        who={<Who names={["Anyone"]} label="Anyone can press it" />}
+        hint={ready ? (hasMajority(shift) ? "Split by hours" : "Nobody agreed in time: equal split") : "After most of the team agrees"}
+      >
+        <div className="stage-actions">
+          <span className="payout-preview">
+            {shift.staff.map((s, i) => (
+              <span key={s.wallet.toBase58()}>
+                {s.name} <b className="mono">{fromUnits(preview[i] ?? 0n)}</b>
+              </span>
+            ))}
+          </span>
+          <span className="spacer" />
+          <button className="btn primary" disabled={!ready || !!pending} onClick={() => payout(payer)}>
+            <Icon name="coins" size={14} /> Pay out now
+          </button>
+        </div>
+      </Step>
     </Panel>
   );
 }
 
-function StaffPart({ shiftKey, shift, phase, me }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; me: Actor }) {
+/** Owner-only controls, clearly separated from the shift steps. */
+function OwnerTools({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint }) {
   const program = useProgram();
-  const { send } = useActors();
+  const { send, actors } = useActors();
   const { run, pending } = useTx();
-  const entry = shift.staff.find((s) => s.wallet.equals(me.publicKey!))!;
-  const initial = String((entry.submitted ? entry.minutes : shift.scheduledMinutes) / 60);
-  const [hours, setHours] = useState(initial);
-  useEffect(() => setHours(initial), [me.id, entry.minutes, entry.submitted]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const minutes = Math.round(Number(hours) * 60);
-  const tooMany = minutes > shift.scheduledMinutes;
-  const invalid = hours === "" || !(Number(hours) >= 0) || tooMany;
-  const unchanged = entry.submitted && minutes === entry.minutes;
-  const agreed = entry.confirmedVersion === shift.version;
-
-  return (
-    <>
-      <div className="action-row">
-        <span className={`step-num ${entry.submitted ? "done" : ""}`}>{entry.submitted ? <Icon name="check" size={12} /> : "1"}</span>
-        <div className="action-meta">
-          <div className="action-title">Your hours</div>
-          <p>Only yours · max {hm(shift.scheduledMinutes)}</p>
-          {tooMany && <em className="field-err">The shift was only {hm(shift.scheduledMinutes)}</em>}
-        </div>
-        <div className="action-control">
-          <div className="input-suffix small">
-            <input inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value.replace(/[^0-9.]/g, ""))} />
-            <span>hours</span>
-          </div>
-          <button
-            className="btn"
-            disabled={invalid || unchanged || !!pending}
-            onClick={() => run("Save hours", async () => send(txOf(await ixSubmitHours(program, me.publicKey!, shiftKey, minutes))))}
-          >
-            {entry.submitted ? "Update" : "Save"}
-          </button>
-        </div>
-      </div>
-      <div className="action-row">
-        <span className={`step-num ${agreed ? "done" : ""}`}>{agreed ? <Icon name="check" size={12} /> : "2"}</span>
-        <div className="action-meta">
-          <div className="action-title">Agree to everyone's hours</div>
-          <p>
-            {phase === "open" ? "After the shift ends." : agreed ? "Done. Any change asks again." : "Check the table first."}
-          </p>
-        </div>
-        <div className="action-control">
-          <button
-            className="btn primary"
-            disabled={phase === "open" || agreed || !!pending}
-            onClick={() => run("Agree to hours", async () => send(txOf(await ixConfirm(program, me.publicKey!, shiftKey, shift.version))))}
-          >
-            {agreed ? "Agreed" : "I agree"}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint }) {
-  const program = useProgram();
-  const { send, active } = useActors();
-  const { run, pending } = useTx();
+  const signerFor = useSignerFor();
+  const demo = useContext(DemoMode);
+  const ownerActor = signerFor(shift.owner) ?? (demo ? actors.find((a) => a.id === "owner") : undefined);
   const [name, setName] = useState("");
   const [wallet, setWallet] = useState("");
-  const owner = active.publicKey!;
+  if (!ownerActor) return null;
+  const owner = shift.owner;
   const key = parseKey(wallet);
   const addErr = !name.trim()
     ? null
@@ -379,67 +494,63 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
 
   // Ask for exactly what's in the vault: the Token program checks the balance before the authority.
   const rawWithdraw = () =>
-    run("Withdraw as owner", async () => send(txOf(...ixOwnerRawWithdraw(owner, shiftKey, pool)), { expectFail: true }), { expectFail: true });
+    run("Owner tries to withdraw", async () => send(txOf(...ixOwnerRawWithdraw(owner, shiftKey, pool)), { as: ownerActor, expectFail: true }), { expectFail: true });
   // The real payout instruction, with the first person's account swapped for the owner's.
   const redirect = () =>
     run(
-      "Redirect a share",
+      "Owner tries to redirect a share",
       async () =>
         send(txOf(await ixSettle(program, owner, shiftKey, shift, shift.staff.map((s, i) => (i === 0 ? ata(owner) : ata(s.wallet))))), {
+          as: ownerActor,
           expectFail: true,
         }),
       { expectFail: true },
     );
 
   return (
-    <>
+    <Panel
+      title={
+        <span className="title-art">
+          <Avatar name={ownerActor.name} size={22} /> Owner tools
+        </span>
+      }
+      description={`Acts as ${ownerActor.name}. The owner can add people, never take money.`}
+      flush
+    >
       {phase === "open" && (
-        <>
-          <div className="action-row">
-            <div className="action-meta">
-              <div className="action-title">End shift now</div>
-              <p>Tips still welcome until payout.</p>
-            </div>
-            <div className="action-control">
-              <button className="btn" disabled={!!pending} onClick={() => run("End shift", async () => send(txOf(await ixEndShift(program, owner, shiftKey))))}>
-                End shift
-              </button>
-            </div>
+        <div className="action-row">
+          <div className="action-meta">
+            <div className="action-title">Add someone covering</div>
+            <p>Add-only. Nobody can be removed.</p>
+            {addErr && <em className="field-err">{addErr}</em>}
           </div>
-          <div className="action-row">
-            <div className="action-meta">
-              <div className="action-title">Add someone</div>
-              <p>Add-only. Nobody can be removed.</p>
-              {addErr && <em className="field-err">{addErr}</em>}
-            </div>
-            <div className="action-control wide">
-              <input className="name-in" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-              <input className="mono" placeholder="Wallet address" value={wallet} onChange={(e) => setWallet(e.target.value)} />
-              <button
-                className="btn"
-                disabled={!name.trim() || !key || !!addErr || shift.staff.length >= MAX_STAFF || !!pending}
-                onClick={() =>
-                  run("Add person", async () => {
-                    const r = await send(txOf(await ixAddStaff(program, owner, shiftKey, key!, name.trim())));
-                    if (!r.failed) {
-                      setName("");
-                      setWallet("");
-                    }
-                    return r;
-                  })
-                }
-              >
-                Add
-              </button>
-            </div>
+          <div className="action-control wide">
+            <input className="name-in" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="mono" placeholder="Wallet address" value={wallet} onChange={(e) => setWallet(e.target.value)} />
+            <button
+              className="btn"
+              disabled={!name.trim() || !key || !!addErr || shift.staff.length >= MAX_STAFF || !!pending}
+              onClick={() =>
+                run("Owner adds a person", async () => {
+                  const r = await send(txOf(await ixAddStaff(program, owner, shiftKey, key!, name.trim())), { as: ownerActor });
+                  if (!r.failed) {
+                    setName("");
+                    setWallet("");
+                  }
+                  return r;
+                })
+              }
+            >
+              Add
+            </button>
           </div>
-        </>
+        </div>
       )}
       <div className="action-row danger-zone" data-tour="security">
         <img className="row-art" src={ART.shield} alt="" />
         <div className="action-meta">
           <div className="action-title">Try to steal the tips</div>
-          <p>Real transactions. Solana rejects both.</p>
+          <p>Real transactions as the owner. Solana rejects both.</p>
         </div>
         <div className="action-control stack">
           <button className="btn danger" disabled={!!pending} onClick={rawWithdraw}>
@@ -450,7 +561,7 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
           </button>
         </div>
       </div>
-    </>
+    </Panel>
   );
 }
 
@@ -526,8 +637,11 @@ function ActivityFeed({ shiftKey }: { shiftKey: PublicKey }) {
   const { connection } = useConnection();
   const { tick } = useTx();
   const [items, setItems] = useState<Activity[] | null>(null);
+  const demo = useContext(DemoMode) && shiftKey.equals(DEMO_SHIFT);
+  const people = useDemoPeople();
   useInterval(
     async () => {
+      if (demo) return setItems(demoActivity(people, Math.floor(Date.now() / 1000)));
       const a = await loadActivity(connection, shiftKey);
       const b = await loadActivity(connection, vaultOf(shiftKey));
       const seen = new Set<string>();
@@ -538,7 +652,7 @@ function ActivityFeed({ shiftKey }: { shiftKey: PublicKey }) {
       );
     },
     20000,
-    [shiftKey.toBase58(), tick],
+    [shiftKey.toBase58(), tick, demo],
   );
   return (
     <Panel title="Activity" flush>
