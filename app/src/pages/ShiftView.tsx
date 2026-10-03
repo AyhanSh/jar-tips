@@ -32,6 +32,7 @@ import {
   phaseOf,
   previewShares,
   short,
+  stageOf,
   statusOf,
   tipUrl,
   tokenBalance,
@@ -41,6 +42,7 @@ import {
   type ShiftAccount,
 } from "../solana";
 import { ART } from "../art";
+import { RoleTag } from "../journey";
 import { Avatar, Callout, CopyButton, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Stat, Tag } from "../ui";
 
 const hm = (minutes: number) => {
@@ -277,6 +279,7 @@ function Step({
   title,
   who,
   hint,
+  art,
   children,
 }: {
   n: number;
@@ -284,12 +287,16 @@ function Step({
   title: string;
   who: React.ReactNode;
   hint?: string;
+  art: keyof typeof ART;
   children: React.ReactNode;
 }) {
   return (
     <section className={`flow-stage ${state}`}>
       <header className="stage-head">
-        <span className="stage-num">{state === "done" ? <Icon name="check" size={13} /> : n}</span>
+        <span className="stage-art">
+          <img src={ART[art]} alt="" />
+          <span className="stage-num">{state === "done" ? <Icon name="check" size={11} /> : n}</span>
+        </span>
         <div className="stage-titles">
           <div className="stage-title">
             {title}
@@ -304,17 +311,6 @@ function Step({
   );
 }
 
-const Who = ({ names, label }: { names: string[]; label: string }) => (
-  <span className="who">
-    <span className="faces">
-      {names.slice(0, 4).map((n) => (
-        <Avatar key={n} name={n} size={20} />
-      ))}
-    </span>
-    {label}
-  </span>
-);
-
 /** The whole shift as four steps. Every button says who it acts as, so nobody has to switch identities. */
 function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint; now: number }) {
   const program = useProgram();
@@ -327,7 +323,7 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
   const guest = actors.find((a) => a.id === "guest")!;
   const open = phase === "open";
   const ready = canSettle(shift, now);
-  const current = open ? 1 : ready ? 4 : shift.staff.some((s) => !s.submitted) ? 2 : 3;
+  const current = stageOf(shift, now); // 1-4 here: a paid-out shift doesn't render the steps
   const state = (n: number): StepState => (n < current ? "done" : n === current ? "current" : "todo");
   const agreed = confirmations(shift);
   const preview = previewShares(shift, pool, !hasMajority(shift) && phase === "fallback");
@@ -345,7 +341,7 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         ))}
       </div>
 
-      <Step n={1} state={state(1)} title="Collect tips" who={<Who names={["Guest"]} label="Guests" />} hint={`${shift.tipCount} tips · ${fromUnits(pool)} USDC in the vault`}>
+      <Step n={1} art="phone" state={state(1)} title="Collect tips" who={<RoleTag role="guest">Guests tip · Owner ends shift</RoleTag>} hint={`${shift.tipCount} tips · ${fromUnits(pool)} USDC in the vault`}>
         <div className="stage-actions">
           <button
             className="btn"
@@ -370,7 +366,7 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         </div>
       </Step>
 
-      <Step n={2} state={state(2)} title="Enter hours" who={<Who names={shift.staff.map((s) => s.name)} label="Each person, only their own" />} hint={`Max ${hm(shift.scheduledMinutes)} each`}>
+      <Step n={2} art="clock" state={state(2)} title="Enter hours" who={<RoleTag role="staff">Each person, only their own</RoleTag>} hint={`Max ${hm(shift.scheduledMinutes)} each`}>
         {shift.staff.map((s) => {
           const me = signerFor(s.wallet);
           const id = s.wallet.toBase58();
@@ -408,9 +404,10 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
 
       <Step
         n={3}
+        art="team"
         state={state(3)}
         title="Agree on everyone's hours"
-        who={<Who names={shift.staff.map((s) => s.name)} label={`${agreed} of ${shift.staff.length} · ${needed(shift)} needed`} />}
+        who={<RoleTag role="staff">{`${agreed} of ${shift.staff.length} agreed · ${needed(shift)} needed`}</RoleTag>}
         hint={open ? "Opens when the shift ends" : "Any change to the hours resets agreement"}
       >
         {shift.staff.map((s) => {
@@ -442,9 +439,10 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
 
       <Step
         n={4}
+        art="split"
         state={state(4)}
         title="Pay out"
-        who={<Who names={["Anyone"]} label="Anyone can press it" />}
+        who={<RoleTag role="anyone">Anyone can press it</RoleTag>}
         hint={ready ? (hasMajority(shift) ? "Split by hours" : "Nobody agreed in time: equal split") : "After most of the team agrees"}
       >
         <div className="stage-actions">

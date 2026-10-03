@@ -7,7 +7,11 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { utils } from "@anchor-lang/core";
-import { explainFailure, faucetIxs } from "./solana";
+import { ata, explainFailure, faucetIxs, tokenBalance } from "./solana";
+import sponsorSecret from "./sponsor-keypair.json";
+
+/** Devnet-only "gas station": tops up the demo wallets when the visitor has no SOL. Public on purpose. */
+const SPONSOR = Keypair.fromSecretKey(Uint8Array.from(sponsorSecret as number[]));
 
 export type ActorId = "wallet" | "owner" | "ana" | "ben" | "kasia" | "guest";
 
@@ -207,21 +211,37 @@ export function ActorProvider({ children }: { children: ReactNode }) {
     [active, connection, wallet],
   );
 
-  // Give every demo keypair a little devnet SOL for fees, and the guest some test USDC to tip with.
+  // Give every demo keypair a little devnet SOL for fees and rent, and the guest some test USDC.
+  // Paid by the connected wallet when it can afford it, otherwise by the bundled devnet sponsor,
+  // so a judge with no wallet (or an empty one) can still run the whole demo.
   const fundCrew = useCallback(async () => {
-    const from = wallet.publicKey;
-    if (!from) throw new Error("Connect a wallet first");
+    const want: Record<string, number> = { owner: 0.03, ana: 0.01, ben: 0.01, kasia: 0.01, guest: 0.01 };
+    const demoKeys = DEMO.map((d) => keys[d.id].publicKey);
+    const infos = await connection.getMultipleAccountsInfo(demoKeys);
+    const transfers = DEMO.map((d, i) => ({ to: demoKeys[i], lamports: Math.round(want[d.id] * LAMPORTS_PER_SOL), have: infos[i]?.lamports ?? 0 }))
+      .filter((t) => t.have < t.lamports / 2);
+    const guestUsdc = await tokenBalance(connection, ata(keys.guest.publicKey));
+    if (!transfers.length && guestUsdc >= 50_000_000n) throw new Error("Demo wallets already have enough to play");
+
+    const total = transfers.reduce((a, t) => a + t.lamports, 0) + 0.005 * LAMPORTS_PER_SOL;
+    const walletBal = wallet.publicKey ? await connection.getBalance(wallet.publicKey) : 0;
+    const payer: Actor | null =
+      wallet.publicKey && walletBal >= total + 0.01 * LAMPORTS_PER_SOL
+        ? actors[0]
+        : (await connection.getBalance(SPONSOR.publicKey)) >= total
+          ? { id: "guest", name: "Demo sponsor", role: "", publicKey: SPONSOR.publicKey, keypair: SPONSOR }
+          : null;
+    if (!payer) throw new Error("The free demo funding has run out. Connect a wallet with devnet SOL (faucet.solana.com).");
+
     const tx = new Transaction();
-    for (const d of DEMO) {
-      const bal = await connection.getBalance(keys[d.id].publicKey);
-      if (bal < 0.01 * LAMPORTS_PER_SOL)
-        tx.add(SystemProgram.transfer({ fromPubkey: from, toPubkey: keys[d.id].publicKey, lamports: 0.02 * LAMPORTS_PER_SOL }));
+    for (const t of transfers) tx.add(SystemProgram.transfer({ fromPubkey: payer.publicKey!, toPubkey: t.to, lamports: t.lamports }));
+    const signers = [];
+    if (guestUsdc < 50_000_000n) {
+      const { ixs, faucet } = faucetIxs(payer.publicKey!, keys.guest.publicKey, 200_000_000n);
+      tx.add(...ixs);
+      signers.push(faucet);
     }
-    const { ixs, faucet } = faucetIxs(from, keys.guest.publicKey, 200_000_000n);
-    tx.add(...ixs);
-    if ((await connection.getBalance(from)) < 0.12 * LAMPORTS_PER_SOL)
-      throw new Error("Your wallet needs about 0.12 devnet SOL to fund the demo wallets");
-    const r = await send(tx, { as: actors[0], signers: [faucet] });
+    const r = await send(tx, { as: payer, signers });
     if (r.failed) throw new Error(r.reason);
     return r.signature;
   }, [wallet.publicKey, connection, keys, send, actors]);

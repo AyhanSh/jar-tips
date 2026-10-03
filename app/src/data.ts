@@ -130,3 +130,18 @@ function useRealShiftOwner(key: PublicKey | null) {
   );
   return owner;
 }
+
+/** Live SOL balance of a wallet (null while unknown), refreshed after every transaction. */
+export function useSol(key: PublicKey | null, tick = 0) {
+  const { connection } = useConnection();
+  const [sol, setSol] = useState<number | null>(null);
+  useInterval(
+    async () => {
+      if (!key) return setSol(null);
+      setSol((await connection.getBalance(key)) / 1e9);
+    },
+    15000,
+    [key?.toBase58(), tick],
+  );
+  return sol;
+}

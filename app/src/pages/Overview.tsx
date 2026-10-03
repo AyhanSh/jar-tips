@@ -6,13 +6,8 @@ import { ART } from "../art";
 import { useInterval } from "../hooks";
 import { PROGRAM_ID, balancesOf, explorerAddr, fromUnits, short } from "../solana";
 import { Avatar, CopyButton, ExtLink, Icon, Panel } from "../ui";
+import { Journey } from "../journey";
 
-const STEPS: { art: keyof typeof ART; title: string; text: string }[] = [
-  { art: "store", title: "Owner opens a shift", text: "Creates the vault" },
-  { art: "phone", title: "Guests tip by QR", text: "Straight into the vault" },
-  { art: "clock", title: "Staff log hours", text: "Most of them agree" },
-  { art: "split", title: "Anyone pays out", text: "Split by hours" },
-];
 
 export default function Overview() {
   const startTour = useContext(HelpCtx);
@@ -36,23 +31,38 @@ export default function Overview() {
         <img className="hero-art" src={ART.jar} alt="A locked tip jar" />
       </section>
 
-      <div className="flow">
-        {STEPS.map((s, i) => (
-          <div className="flow-step" key={s.title}>
-            <div className="card">
-              <span className="card-step">0{i + 1}</span>
-              <img className="card-art" src={ART[s.art]} alt="" />
-              <h3 className="card-title">{s.title}</h3>
-              <p className="card-text">{s.text}</p>
-            </div>
-            {i < STEPS.length - 1 && (
-              <span className="flow-arrow" aria-hidden="true">
-                <Icon name="arrowRight" size={16} />
-              </span>
-            )}
+      <Journey current={0} />
+
+      <section>
+        <h2 className="section-title">Try it yourself</h2>
+        <div className="try">
+          <div className="try-step">
+            <span className="try-n">1</span>
+            <img src={ART.jar} alt="" />
+            <b>Watch the guide</b>
+            <span>60 seconds, sample data</span>
+            <button className="btn" onClick={startTour}>
+              <Icon name="compass" size={14} /> Guide me
+            </button>
           </div>
-        ))}
-      </div>
+          <div className="try-step">
+            <span className="try-n">2</span>
+            <img src={ART.wallets} alt="" />
+            <b>Get free demo money</b>
+            <span>Devnet SOL and test USDC</span>
+            <FundButton />
+          </div>
+          <div className="try-step">
+            <span className="try-n">3</span>
+            <img src={ART.store} alt="" />
+            <b>Run a real shift</b>
+            <span>On Solana devnet</span>
+            <a className="btn primary" href="#/venue">
+              Go to venue <Icon name="arrowRight" size={14} />
+            </a>
+          </div>
+        </div>
+      </section>
 
       <DemoWallets />
 
@@ -105,8 +115,8 @@ function DemoWallets() {
         <button
           data-tour="fund"
           className={`btn ${lowCrew ? "primary" : ""}`}
-          disabled={!wallet.publicKey || !!pending}
-          title={wallet.publicKey ? "Tops up low wallets and gives the guest test USDC" : "Connect a wallet first"}
+          disabled={!!pending}
+          title="Free devnet SOL for the demo people, and test USDC for the guest"
           onClick={() => run("Fund demo wallets", async () => ({ signature: await fundCrew(), failed: false }))}
         >
           <Icon name="coins" size={14} /> Fund
@@ -141,5 +151,31 @@ function DemoWallets() {
         ))}
       </div>
     </Panel>
+  );
+}
+
+/** Funds the demo people; turns into a check mark once they're ready to play. */
+function FundButton() {
+  const { connection } = useConnection();
+  const { actors, fundCrew } = useActors();
+  const { run, pending, tick } = useTx();
+  const [ready, setReady] = useState<boolean | null>(null);
+  useInterval(
+    async () => {
+      const keys = actors.filter((a) => a.keypair).map((a) => a.publicKey!);
+      const res = await balancesOf(connection, keys);
+      setReady(res.every((r) => r.sol >= 0.004));
+    },
+    20000,
+    [tick],
+  );
+  return ready ? (
+    <span className="chip yes">
+      <Icon name="check" size={12} /> Everyone is funded
+    </span>
+  ) : (
+    <button className="btn primary" disabled={!!pending} onClick={() => run("Free demo money", async () => ({ signature: await fundCrew(), failed: false }))}>
+      <Icon name="coins" size={14} /> Fund demo people
+    </button>
   );
 }

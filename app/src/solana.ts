@@ -140,6 +140,17 @@ export const canSettle = (shift: ShiftAccount, now: number) => {
   return (phase !== "open" && phase !== "settled" && hasMajority(shift)) || phase === "fallback";
 };
 
+/**
+ * Where a shift is in its life: 1 collecting tips, 2 waiting for hours, 3 waiting for agreement,
+ * 4 ready to pay out, 5 paid out.
+ */
+export function stageOf(shift: ShiftAccount, now: number): 1 | 2 | 3 | 4 | 5 {
+  if (shift.settled) return 5;
+  if (phaseOf(shift, now) === "open") return 1;
+  if (canSettle(shift, now)) return 4;
+  return shift.staff.some((s) => !s.submitted) ? 2 : 3;
+}
+
 /** One human status for a shift, used in lists and on the shift page. */
 export function statusOf(shift: ShiftAccount, now: number): { label: string; tone: "gray" | "blue" | "green" | "orange" | "yellow" } {
   const phase = phaseOf(shift, now);

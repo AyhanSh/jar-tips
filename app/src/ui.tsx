@@ -109,6 +109,12 @@ const PATHS: Record<string, ReactNode> = {
     </>
   ),
   pointer: <path d="M4 3l7 17 2.5-7.5L21 10z" />,
+  globe: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+    </>
+  ),
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
   terminal: <path d="m4 17 6-6-6-6M12 19h8" />,
   book: (

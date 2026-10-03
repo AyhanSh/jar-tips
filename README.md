@@ -16,8 +16,8 @@ program splits it equally. **The owner has no withdraw permission at all, becaus
 
 **On a laptop**
 1. Open https://jar-tips.vercel.app. The **guide** starts by itself: the page dims and lights up the next thing to click. Reopen it any time with **Guide** in the top bar.
-2. Connect Phantom or Solflare **on devnet** (Settings → Developer settings → Testnet mode → Solana Devnet). No wallet? Pick **Demo owner** in the signer menu at the top right.
-3. Follow the guide: open a shift → tip → try to steal as the owner (both attempts fail on-chain) → staff enter hours and agree → anyone presses **Pay out**.
+2. **No wallet needed:** on the Overview press **Fund demo people** (free devnet SOL and test USDC), then **Go to venue → Play as demo owner**. Prefer your own wallet? Connect Phantom or Solflare **on devnet** (Settings → Developer settings → Testnet mode → Solana Devnet).
+3. Every page shows the five-step journey (Create venue → Open a shift → Guests tip → Staff agree → Pay out) with **You are here**, and one **Next step** card. On a shift, the checklist has a button per person (**Save as Ana**, **Ben agrees**, **Pay out now**). In **Owner tools**, try to steal: both attempts fail on-chain.
 4. Every notification has an **Explorer** button that opens the transaction on Solana Explorer.
 
 **On a phone**
@@ -119,6 +119,7 @@ A tip-splitting app on a database (several exist) still has an operator who hold
   first and make `open_shift` fail for that venue (`init` requires a fresh account). The fix is `init_if_needed` on the vault. It's safe because
   the account's only authority is still the shift PDA. Funds are never at risk; it only blocks opening new shifts.
 - **Pooled tips only.** A QR tips the whole shift, not one waiter. Personal tips (per-waiter QR, 100% to that person) are a planned extension.
+- **Demo funding key is public.** `app/src/sponsor-keypair.json` is a devnet-only "gas station" with a little devnet SOL, so judges can play without a wallet. Like the test-USDC faucet key, it's public on purpose and controls nothing in the program.
 - **Off-ramp.** Staff receive USDC; turning it into złoty is a separate step (exchange, or a stablecoin card). The demo uses a devnet test USDC with a public faucet.
 
 ---
