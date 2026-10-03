@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useConnection } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useActors } from "../actors";
 import { SignerMenu, useTx } from "../App";
 import { useShift } from "../data";
 import { useInterval, useProgram } from "../hooks";
-import { ata, explorerTx, faucetIxs, fromUnits, ixTip, parseKey, toUnits, tokenBalance, txOf } from "../solana";
+import { ata, explorerTx, faucetIxs, fromUnits, isMobile, ixTip, parseKey, tipUrl, toUnits, tokenBalance, txOf, walletBrowseLinks } from "../solana";
 import { Avatar, Icon } from "../ui";
 import { ART } from "../art";
 
@@ -22,15 +22,23 @@ export default function TipPage({ address }: { address: string }) {
   const [custom, setCustom] = useState("");
   const [bal, setBal] = useState<bigint | null>(null);
   const [done, setDone] = useState<{ sig: string; amount: number } | null>(null);
+  const [sol, setSol] = useState<number | null>(null);
+  const { wallets } = useWallet();
+  const phone = useMemo(isMobile, []);
+  const walletInstalled = wallets.some((w) => w.readyState === "Installed");
 
-  // Without a connected wallet, the demo guest is the natural customer.
+  // On a phone the guest pays with their own wallet. On the demo laptop without a wallet, the demo guest pays.
   useEffect(() => {
-    if (!actors[0].publicKey && active.id === "wallet") setActive("guest");
-  }, [actors, active.id, setActive]);
+    if (phone) {
+      if (active.id !== "wallet") setActive("wallet");
+    } else if (!actors[0].publicKey && active.id === "wallet") setActive("guest");
+  }, [phone, actors, active.id, setActive]);
 
   useInterval(
     async () => {
-      if (active.publicKey) setBal(await tokenBalance(connection, ata(active.publicKey)));
+      if (!active.publicKey) return;
+      setBal(await tokenBalance(connection, ata(active.publicKey)));
+      setSol((await connection.getBalance(active.publicKey)) / 1e9);
     },
     10000,
     [active.publicKey?.toBase58(), tick],
@@ -142,7 +150,7 @@ export default function TipPage({ address }: { address: string }) {
         {active.publicKey ? (
           <span className="muted small">
             Balance {bal === null ? "…" : fromUnits(bal)} USDC
-            {bal !== null && !enough && (
+            {bal !== null && !enough && sol !== null && sol >= 0.002 && (
               <>
                 {" · "}
                 <button
@@ -161,10 +169,33 @@ export default function TipPage({ address }: { address: string }) {
             )}
           </span>
         ) : (
-          <span className="muted small">Connect a wallet to tip</span>
+          <span className="muted small">{phone ? "Connect your wallet to tip" : "Connect a wallet to tip"}</span>
         )}
+
+        {active.publicKey && sol !== null && sol < 0.002 && (
+          <a className="hint-row" href="https://faucet.solana.com" target="_blank" rel="noreferrer">
+            <Icon name="coins" size={13} /> This wallet needs a little devnet SOL for fees. Get some free
+            <Icon name="external" size={11} />
+          </a>
+        )}
+
+        {phone && !walletInstalled && !actors[0].publicKey && (
+          <div className="open-in">
+            <span className="muted small">Open this page in your wallet app:</span>
+            <div className="row gap">
+              <a className="btn primary" href={walletBrowseLinks(tipUrl(key)).phantom}>
+                Open in Phantom
+              </a>
+              <a className="btn" href={walletBrowseLinks(tipUrl(key)).solflare}>
+                Solflare
+              </a>
+            </div>
+            <span className="muted small">Set the wallet to devnet (Settings → Developer settings).</span>
+          </div>
+        )}
+
         <div className="tip-who">
-          <SignerMenu only={["wallet", "guest"]} />
+          {!phone && <SignerMenu only={["wallet", "guest"]} />}
           {!actors[0].publicKey && <WalletMultiButton />}
         </div>
       </div>

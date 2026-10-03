@@ -119,7 +119,11 @@ const PATHS: Record<string, ReactNode> = {
   ),
 };
 
+/** Everything is drawn 10% larger than the nominal size (the whole UI is scaled up). */
+const SCALE = 1.1;
+
 export function Icon({ name, size = 16, className }: { name: keyof typeof PATHS | string; size?: number; className?: string }) {
+  size = Math.round(size * SCALE);
   return (
     <svg
       className={`icon ${className ?? ""}`}
@@ -147,6 +151,7 @@ export function Spinner() {
 }
 
 export function Avatar({ name, size = 22 }: { name: string; seed?: string; size?: number }) {
+  size = Math.round(size * SCALE);
   return (
     <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.46 }}>
       {(name.trim()[0] ?? "?").toUpperCase()}

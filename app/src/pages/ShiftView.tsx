@@ -31,6 +31,7 @@ import {
   previewShares,
   short,
   statusOf,
+  tipUrl,
   tokenBalance,
   txOf,
   vaultOf,
@@ -123,8 +124,9 @@ export default function ShiftView({ address }: { address: string }) {
 
       {!shift.settled && <YourPart shiftKey={key} shift={shift} phase={phase} pool={pool} />}
 
+      {!shift.settled && <TipLink shiftKey={key} />}
+
       <div className="two-col">
-        {!shift.settled && <TipLink shiftKey={key} />}
         <Panel title="On-chain">
           <Properties>
             <Prop label="Vault">
@@ -453,26 +455,70 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
 }
 
 function TipLink({ shiftKey }: { shiftKey: PublicKey }) {
-  const url = `${window.location.origin}${window.location.pathname}#/tip/${shiftKey.toBase58()}`;
+  const url = tipUrl(shiftKey);
   const [src, setSrc] = useState("");
+  const [big, setBig] = useState(false);
   useEffect(() => {
-    QRCode.toDataURL(url, { margin: 1, width: 320, color: { dark: "#171717", light: "#ffffff" } }).then(setSrc);
+    QRCode.toDataURL(url, { margin: 1, width: 720, color: { dark: "#171717", light: "#ffffff" } }).then(setSrc);
   }, [url]);
+  const local = /localhost|127\.0\.0\.1/.test(url);
   return (
-    <Panel tour="tip-link" title="Tip QR" description="Print it on the bill.">
+    <Panel tour="tip-link" title="Tip QR" description="Scan with a phone to tip.">
       <div className="qr-block">
-        {src && <img src={src} alt="QR code for the guest tip page" />}
+        {src && (
+          <button className="qr-thumb" onClick={() => setBig(true)} title="Show full screen">
+            <img src={src} alt="QR code for the guest tip page" />
+          </button>
+        )}
         <div className="qr-side">
           <code className="code-line">{url.replace(/^https?:\/\//, "")}</code>
+          {local && (
+            <p className="field-err">
+              <Icon name="alert" size={12} /> Points to localhost, so phones can't open it. Set VITE_PUBLIC_URL.
+            </p>
+          )}
           <div className="row gap">
+            <button className="btn primary" onClick={() => setBig(true)}>
+              <Icon name="qr" size={14} /> Show QR
+            </button>
             <a className="btn" href={`#/tip/${shiftKey.toBase58()}`}>
-              Open tip page
+              Open here
             </a>
             <CopyButton text={url} label="Copy link" />
           </div>
         </div>
       </div>
+      {big && src && <QrFullscreen src={src} url={url} onClose={() => setBig(false)} />}
     </Panel>
+  );
+}
+
+/** Projector view: a big QR the audience can scan from their seats. */
+function QrFullscreen({ src, url, onClose }: { src: string; url: string; onClose: () => void }) {
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [onClose]);
+  return (
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="qr-full">
+        <button className="icon-btn modal-close" onClick={onClose} aria-label="Close">
+          <Icon name="x" size={16} />
+        </button>
+        <img src={ART.phone} alt="" className="qr-full-art" />
+        <h2>Scan to tip the team</h2>
+        <img className="qr-full-code" src={src} alt="QR code for the guest tip page" />
+        <div className="qr-full-steps">
+          <span><b>1</b> Scan</span>
+          <Icon name="arrowRight" size={14} />
+          <span><b>2</b> Open in Phantom</span>
+          <Icon name="arrowRight" size={14} />
+          <span><b>3</b> Tip</span>
+        </div>
+        <code className="code-line">{url.replace(/^https?:\/\//, "")}</code>
+      </div>
+    </div>
   );
 }
 

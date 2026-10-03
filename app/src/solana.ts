@@ -22,6 +22,18 @@ import devnet from "./devnet.json";
 import faucetSecret from "./faucet-keypair.json";
 
 export const RPC_URL: string = import.meta.env.VITE_RPC_URL || clusterApiUrl("devnet");
+/**
+ * Where QR codes point. Set VITE_PUBLIC_URL to the deployed site when presenting from localhost,
+ * so a phone scanning the QR opens the public app instead of the laptop's localhost.
+ */
+export const PUBLIC_URL: string = (import.meta.env.VITE_PUBLIC_URL || window.location.origin + window.location.pathname).replace(/\/+$/, "");
+export const tipUrl = (shift: PublicKey | string) => `${PUBLIC_URL}/#/tip/${shift.toString()}`;
+export const isMobile = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+/** Opens a page inside a mobile wallet's built-in browser, where the wallet can sign. */
+export const walletBrowseLinks = (url: string) => ({
+  phantom: `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(PUBLIC_URL)}`,
+  solflare: `https://solflare.com/ul/v1/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(PUBLIC_URL)}`,
+});
 export const PROGRAM_ID = new PublicKey(idl.address);
 export const TIP_MINT = new PublicKey(devnet.testUsdcMint);
 export const DECIMALS = 6;

@@ -60,7 +60,7 @@ export function useTour() {
 const PAD = 8;
 /** The arrow bounces toward the target. */
 const nudge = (x: number, y: number) => ({ "--nx": `${x}px`, "--ny": `${y}px` }) as React.CSSProperties;
-const CARD_W = 300;
+const CARD_W = 330;
 
 export function Tour({ onClose }: { onClose: () => void }) {
   const [i, setI] = useState(0);
