@@ -1,4 +1,4 @@
-# Napiwek: 3-minute video script + live demo checklist
+# Jar: 3-minute video script + live demo checklist
 
 ## Before you record / go live
 - [ ] `app/.env.local` has a private devnet RPC (`VITE_RPC_URL=…`). The public RPC returns HTTP 429 under demo load.
@@ -14,7 +14,7 @@
 > "When you tip by card, the money doesn't go to your waiter. It lands in the restaurant's account, and the staff have to trust the owner to pass it on. The UK had to pass a law about it in 2024. We replaced the owner's role with a Solana program."
 
 **0:20–0:35 · Who it's for**
-> "Napiwek is for waiters, bartenders and runners in Polish restaurants who pool tips per shift. Three people tonight: Ana, Ben and Kasia."
+> "Jar is for waiters, bartenders and runners in Polish restaurants who pool tips per shift. Three people tonight: Ana, Ben and Kasia."
 
 **0:35–1:00 · Owner opens a shift** *(Venue page, connected wallet)*
 - **New shift** "Friday dinner", 8 h, *Use demo crew* → **Open shift** → Phantom approves → the shift page opens.
@@ -38,7 +38,7 @@
 > "Pressed by a guest, not the owner and not us. If nobody had agreed within the window, anyone could trigger an equal split instead, so the pot can't be held hostage."
 
 **2:45–2:55 · Close**
-> "Tips belong to the people who earned them. With Napiwek that's a rule, not a promise."
+> "Tips belong to the people who earned them. With Jar that's a rule, not a promise."
 
 ## Likely judge questions: one-line answers
 - **Where does the middleman disappear?** `settle` in `programs/napiwek/src/lib.rs:186`. The vault authority is the shift PDA, and payout accounts are checked against the on-chain roster (`:208`).

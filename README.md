@@ -1,13 +1,14 @@
-# 🫙 Napiwek: tips the owner can't touch
+# 🫙 Jar: tips the owner can't touch
 
 **Superteam Poland · Finance Without Intermediaries**
 
-*Napiwek* is Polish for "tip". Customers tip by QR code into a **shift vault owned by a Solana program**, not by the restaurant.
+**Jar** is a tip jar nobody can open but the team. Customers tip by QR code into a **shift vault owned by a Solana program**, not by the restaurant.
 When the shift ends, each staff member enters their own hours; once **more than half of the shift has confirmed**, anyone can press
 "Pay out" and the program splits the pot pro-rata, straight into each person's wallet. If the staff can't agree in time, the
 program splits it equally. **The owner has no withdraw permission at all, because the program has no withdraw instruction.**
 
-- **Program (devnet):** [`APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X`](https://explorer.solana.com/address/APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X?cluster=devnet)
+- **Program (devnet):** (its on-chain name is `napiwek`, Polish for "tip")
+- **Program ID:** [`APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X`](https://explorer.solana.com/address/APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X?cluster=devnet)
 - **Stack:** Anchor 1.x (Rust) · SPL Token / Token-2022 via `token_interface` · React + Vite · Wallet Adapter (Wallet Standard) · `@anchor-lang/core`
 - **Target user:** waiters, bartenders and runners in Polish restaurants and bars where tips arrive by card or QR and are pooled per shift, typically a 5–15-person team whose card tips currently land in the owner's merchant account.
 
@@ -175,7 +176,7 @@ app/scripts/check-tx-size.mts proves a 12-person shift's transactions fit Solana
 ```
 
 ## From demo to product
-- **Who pays:** venues already pay for tip-pool software (tronc tools, POS add-ons). Napiwek charges per venue per month, never a cut of tips.
+- **Who pays:** venues already pay for tip-pool software (tronc tools, POS add-ons). Jar charges per venue per month, never a cut of tips.
 - **POS integration:** print the shift QR on the receipt; accept card tips through an on-ramp that settles into the vault as USDC.
 - **Staff identity:** staff join a venue with a one-time code, so the owner can't invent people; payroll export for tax reporting.
 - **Points / roles:** weighted shares (e.g. kitchen 0.5×) fixed in the venue config at shift open, visible to everyone before the shift starts.

@@ -5,7 +5,8 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { utils } from "@anchor-lang/core";
 import { explainFailure, faucetIxs } from "./solana";
 
 export type ActorId = "wallet" | "owner" | "ana" | "ben" | "kasia" | "guest";
@@ -34,19 +35,41 @@ const DEMO: { id: Exclude<ActorId, "wallet">; name: string; role: string }[] = [
 
 const STORE = "napiwek.demo-keys.v1";
 
-/** Fallback confirmation when the RPC rate-limits confirmTransaction. Returns the tx error, or null. */
-async function pollStatus(connection: Connection, signature: string): Promise<unknown> {
-  for (let i = 0; i < 40; i++) {
-    await new Promise((r) => setTimeout(r, 1500));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Tiny priority fee (≈0.000004 SOL) so a busy devnet leader still picks the transaction up. */
+const PRIORITY_FEE = ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 20_000 });
+
+/**
+ * Sends a signed transaction and keeps re-broadcasting it every 2s until it confirms or its
+ * blockhash expires. Devnet regularly drops a transaction sent only once (that's what
+ * "block height exceeded" means), and rebroadcasting the same bytes is safe: a signature can
+ * only ever land once. Returns the on-chain error (null = success).
+ */
+async function sendAndConfirmRaw(
+  connection: Connection,
+  raw: Buffer | Uint8Array,
+  signature: string,
+  lastValidBlockHeight: number,
+  skipPreflight: boolean,
+): Promise<unknown> {
+  // First send with preflight (unless asked not to) so simulation errors surface immediately.
+  await retry429(() => connection.sendRawTransaction(raw, { skipPreflight, maxRetries: 0 }));
+  for (let i = 0; ; i++) {
+    await sleep(2000);
     try {
-      const { value } = await connection.getSignatureStatuses([signature]);
-      const st = value[0];
+      const st = (await connection.getSignatureStatuses([signature])).value[0];
       if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) return st.err;
+      if (i % 3 === 2 && (await connection.getBlockHeight("confirmed")) > lastValidBlockHeight) break;
+      connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
     } catch {
-      /* rate-limited again; keep waiting */
+      /* rate-limited: keep trying until the blockhash expires */
     }
   }
-  throw new Error("Timed out waiting for confirmation. Check the transaction on Explorer: " + signature);
+  // One last look before giving up: it may have landed just as the blockhash expired.
+  const st = (await connection.getSignatureStatuses([signature], { searchTransactionHistory: true })).value[0];
+  if (st) return st.err;
+  throw new Error("Devnet didn't pick the transaction up in time. Nothing was sent or charged, so just try again.");
 }
 
 /** Polling gives up on HTTP 429 (see main.tsx); user actions back off and retry instead. */
@@ -149,26 +172,26 @@ export function ActorProvider({ children }: { children: ReactNode }) {
       if (!who.publicKey) throw new Error("Connect a wallet first");
       const skipPreflight = !!opts.expectFail;
       const latest = await retry429(() => connection.getLatestBlockhash("confirmed"));
+      tx.instructions = [PRIORITY_FEE, ...tx.instructions];
       tx.recentBlockhash = latest.blockhash;
       tx.feePayer = who.publicKey;
-      let signature: string;
+
+      let signed: Transaction;
       if (who.keypair) {
         tx.sign(who.keypair, ...(opts.signers ?? []));
-        const raw = tx.serialize();
-        signature = await retry429(() => connection.sendRawTransaction(raw, { skipPreflight }));
+        signed = tx;
+      } else if (wallet.signTransaction) {
+        // The wallet only signs; this app broadcasts through its own devnet connection, so the
+        // network Phantom happens to be on doesn't matter and a dropped send gets retried.
+        signed = await wallet.signTransaction(tx);
+        if (opts.signers?.length) signed.partialSign(...opts.signers);
       } else {
-        signature = await wallet.sendTransaction(tx, connection, { signers: opts.signers, skipPreflight });
+        const signature = await wallet.sendTransaction(tx, connection, { signers: opts.signers, skipPreflight });
+        const st = await connection.confirmTransaction({ signature, ...latest }, "confirmed");
+        return st.value.err ? { signature, failed: true, reason: "Transaction failed on-chain" } : { signature, failed: false };
       }
-      // A failed tx either comes back as `value.err` or, if the status poll wins the race against
-      // the websocket, is thrown as the raw `{ InstructionError }` object. Treat both the same.
-      let err: unknown = null;
-      try {
-        err = (await connection.confirmTransaction({ signature, ...latest }, "confirmed")).value.err;
-      } catch (e) {
-        if (!(e instanceof Error)) err = e;
-        else if (!/429/.test(e.message)) throw e;
-        else err = await pollStatus(connection, signature);
-      }
+      const signature = utils.bytes.bs58.encode(signed.signature!);
+      const err = await sendAndConfirmRaw(connection, signed.serialize(), signature, latest.lastValidBlockHeight, skipPreflight);
       if (!err) return { signature, failed: false };
       let logs: string[] | null | undefined;
       for (let i = 0; i < 5 && !logs; i++) {

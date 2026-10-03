@@ -1,4 +1,4 @@
-/* Napiwek — dashboard UI in the style of Supabase Studio: dark-first, bordered panels,
+/* Jar — dashboard UI in the style of Supabase Studio: light theme, bordered panels,
    monospaced data, pill badges, one green accent. */
 
 :root {
@@ -44,38 +44,37 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    --app: #f8f8f8;
-    --bg: #fcfcfc;
-    --surface-100: #ffffff;
-    --surface-200: #f6f6f6;
-    --surface-300: #eeeeee;
-    --overlay: #ffffff;
-    --control: #ffffff;
-    --border: #e4e4e4;
-    --border-strong: #d1d1d1;
-    --border-muted: #ededed;
-    --fg: #171717;
-    --fg-light: #525252;
-    --fg-lighter: #858585;
-    --fg-muted: #b3b3b3;
-    --brand: #3ecf8e;
-    --brand-link: #0f8a58;
-    --brand-btn: #3ecf8e;
-    --brand-btn-hover: #36bd80;
-    --brand-btn-border: #2fb676;
-    --brand-btn-fg: #052b1a;
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-    --gray-bg: #f3f3f3;  --gray-tx: #525252;  --gray-bd: #e0e0e0;
-    --green-bg: #ebfaf2; --green-tx: #0f8a58; --green-bd: #b5ebd0;
-    --blue-bg: #eef4ff;  --blue-tx: #1f5fcc;  --blue-bd: #c6d9fb;
-    --yellow-bg: #fff8e6; --yellow-tx: #9a6100; --yellow-bd: #f8dc9c;
-    --orange-bg: #fff3ea; --orange-tx: #b2500c; --orange-bd: #fbd1b0;
-    --red-bg: #fff0f0;   --red-tx: #c4262d;   --red-bd: #f6c2c4;
-    --purple-bg: #f5f1ff; --purple-tx: #6a45d1; --purple-bd: #ddd1fb;
-    color-scheme: light;
-  }
+:root {
+  /* light theme */
+  --app: #f8f8f8;
+  --bg: #fcfcfc;
+  --surface-100: #ffffff;
+  --surface-200: #f6f6f6;
+  --surface-300: #eeeeee;
+  --overlay: #ffffff;
+  --control: #ffffff;
+  --border: #e4e4e4;
+  --border-strong: #d1d1d1;
+  --border-muted: #ededed;
+  --fg: #171717;
+  --fg-light: #525252;
+  --fg-lighter: #858585;
+  --fg-muted: #b3b3b3;
+  --brand: #3ecf8e;
+  --brand-link: #0f8a58;
+  --brand-btn: #3ecf8e;
+  --brand-btn-hover: #36bd80;
+  --brand-btn-border: #2fb676;
+  --brand-btn-fg: #052b1a;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --gray-bg: #f3f3f3;  --gray-tx: #525252;  --gray-bd: #e0e0e0;
+  --green-bg: #ebfaf2; --green-tx: #0f8a58; --green-bd: #b5ebd0;
+  --blue-bg: #eef4ff;  --blue-tx: #1f5fcc;  --blue-bd: #c6d9fb;
+  --yellow-bg: #fff8e6; --yellow-tx: #9a6100; --yellow-bd: #f8dc9c;
+  --orange-bg: #fff3ea; --orange-tx: #b2500c; --orange-bd: #fbd1b0;
+  --red-bg: #fff0f0;   --red-tx: #c4262d;   --red-bd: #f6c2c4;
+  --purple-bg: #f5f1ff; --purple-tx: #6a45d1; --purple-bd: #ddd1fb;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -487,12 +486,12 @@ input.amount { font-size: 14px; height: 50px; }
 .hero-text { position: relative; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
 .hero-title { font-size: 34px; line-height: 1.12; font-weight: 600; letter-spacing: -0.02em; }
 .hero-desc { color: var(--fg-light); font-size: 14.5px; max-width: 58ch; }
-.hero-art { position: relative; width: 220px; height: 220px; justify-self: center; animation: float 6s ease-in-out infinite; filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.35)); }
+.hero-art { position: relative; width: 220px; height: 220px; justify-self: center; animation: float 6s ease-in-out infinite; filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.14)); }
 @keyframes float { 50% { transform: translateY(-8px) rotate(-1deg); } }
 
 .card { position: relative; transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
-.card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 35%, var(--border)); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18); }
-.card-art { width: 64px; height: 64px; margin: -6px 0 -4px -6px; filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.25)); transition: transform 0.2s; }
+.card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 35%, var(--border)); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.07); }
+.card-art { width: 64px; height: 64px; margin: -6px 0 -4px -6px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.12)); transition: transform 0.2s; }
 .card:hover .card-art { transform: scale(1.06) rotate(-2deg); }
 
 .stat { position: relative; overflow: hidden; }
@@ -500,16 +499,16 @@ input.amount { font-size: 14px; height: 50px; }
 
 .title-art { display: inline-flex; align-items: center; gap: 10px; }
 .title-art img { width: 30px; height: 30px; margin: -6px 0; }
-.empty-art { width: 96px; height: 96px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.25)); }
+.empty-art { width: 96px; height: 96px; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.12)); }
 .intro-card { display: flex; align-items: center; gap: 20px; padding: 8px 0; }
-.intro-card img { width: 96px; height: 96px; flex-shrink: 0; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.25)); }
+.intro-card img { width: 96px; height: 96px; flex-shrink: 0; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.12)); }
 .row-art { width: 40px; height: 40px; flex-shrink: 0; margin: -6px 0; }
 .success-card {
   display: flex; align-items: center; gap: 16px; padding: 14px 18px; border-radius: 10px;
   border: 1px solid var(--green-bd); background: linear-gradient(90deg, var(--green-bg), transparent 70%), var(--surface-100);
 }
 .success-card img { width: 64px; height: 64px; flex-shrink: 0; margin: -6px 0; }
-.tip-art { width: 84px; height: 84px; display: block; margin: -10px 0 8px -8px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.25)); }
+.tip-art { width: 84px; height: 84px; display: block; margin: -10px 0 8px -8px; filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.12)); }
 
 /* ---------- onboarding modal ---------- */
 .modal-backdrop {
@@ -531,7 +530,7 @@ input.amount { font-size: 14px; height: 50px; }
   position: absolute; width: 300px; height: 300px; border-radius: 50%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--brand) 30%, transparent), transparent);
 }
-.onb-art img { position: relative; width: 170px; height: 170px; animation: artIn 0.35s ease-out, float 6s ease-in-out 0.35s infinite; filter: drop-shadow(0 16px 26px rgba(0, 0, 0, 0.35)); }
+.onb-art img { position: relative; width: 170px; height: 170px; animation: artIn 0.35s ease-out, float 6s ease-in-out 0.35s infinite; filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.14)); }
 .onb-body { padding: 22px 26px 6px; animation: fade 0.25s ease-out; min-height: 178px; }
 .onb-eyebrow { font-family: var(--mono); font-size: 11.5px; color: var(--brand-link); text-transform: uppercase; letter-spacing: 0.06em; }
 .onb-title { font-size: 20px; font-weight: 600; margin: 6px 0 8px; letter-spacing: -0.01em; }

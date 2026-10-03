@@ -177,10 +177,10 @@ function TipCard({ venue, children }: { venue?: string; children: React.ReactNod
     <div className="tip-wrap">
       <div className="tip-venue">
         <span className="ws-mark">{(venue ?? "N")[0]}</span>
-        {venue ?? "Napiwek"}
+        {venue ?? "Jar"}
       </div>
       <div className="tip-card">{children}</div>
-      <div className="tip-powered muted small">Napiwek · Solana devnet</div>
+      <div className="tip-powered muted small">Jar · Solana devnet</div>
     </div>
   );
 }

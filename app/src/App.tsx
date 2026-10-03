@@ -159,9 +159,9 @@ function Chrome({ route, onMenu, children }: { route: string[]; onMenu: () => vo
 function Rail({ section }: { section: "home" | "venue" }) {
   return (
     <nav className="rail" aria-label="Main">
-      <a className="rail-logo" href="#/" aria-label="Napiwek">
+      <a className="rail-logo" href="#/" aria-label="Jar">
         <img className="logo-img" src="/icons/jar.png" alt="" />
-        <span className="rail-label logo-word">Napiwek</span>
+        <span className="rail-label logo-word">Jar</span>
       </a>
       <a className={`rail-item ${section === "home" ? "on" : ""}`} href="#/">
         <Icon name="home" size={18} />
@@ -183,7 +183,7 @@ function Rail({ section }: { section: "home" | "venue" }) {
 function TopBar({ route, onMenu, browsed }: { route: string[]; onMenu: () => void; browsed: Browsed }) {
   const { venue, shifts } = browsed;
   const shift = route[0] === "shift" ? shifts.find((s) => s.key.toBase58() === route[1]) : undefined;
-  const crumbs: { label: string; href?: string }[] = [{ label: "Napiwek", href: "#/" }];
+  const crumbs: { label: string; href?: string }[] = [{ label: "Jar", href: "#/" }];
   if (route[0] === "venue" || route[0] === "owner" || route[0] === "shift") crumbs.push({ label: venue?.name ?? "Venue", href: "#/venue" });
   if (route[0] === "shift") crumbs.push({ label: shift ? shift.acc.label || `Shift ${shift.acc.index.toNumber() + 1}` : "Shift" });
   if (route[0] === "venue" && route[1] === "new") crumbs.push({ label: "New shift" });

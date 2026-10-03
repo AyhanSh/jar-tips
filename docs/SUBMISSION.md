@@ -1,6 +1,6 @@
 # Submission text
 
-**Title:** Napiwek: restaurant tips the owner can't touch
+**Title:** Jar: restaurant tips the owner can't touch
 
 **One-liner:** Guests tip by QR into a shift vault owned by a Solana program; staff confirm their own hours and anyone can trigger the pro-rata payout. The owner has no withdraw permission because the program has no withdraw instruction.
 
@@ -12,7 +12,7 @@ When a guest tips by card or QR, the tip doesn't reach the waiter. It settles in
 have to trust the owner to pass it on, split fairly and on time. They can't see the shift total. The UK made it law in October 2024 that
 employers pass on 100% of tips, because staff had no way to check. A law still needs an inspector and a tribunal.
 
-Napiwek moves the money out of the owner's hands and into a Solana program:
+Jar moves the money out of the owner's hands and into a Solana program:
 
 1. **Owner opens a shift** with the roster. The program creates a vault whose only authority is a program-derived address. This is the owner's last say over the money.
 2. **Guests tip by QR**: a plain web page with 5 / 10 / 20 USDC buttons. Tokens go straight from the guest's wallet into the vault.
