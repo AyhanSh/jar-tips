@@ -144,9 +144,9 @@ function Sidebar({ route }: { route: string[] }) {
       </nav>
 
       {shifts.length > 0 && (
-        <nav className="nav">
+        <nav className="nav shifts">
           <div className="nav-heading">Shifts</div>
-          {shifts.slice(0, 8).map(({ key, acc }) => {
+          {shifts.slice(0, 6).map(({ key, acc }) => {
             const st = statusOf(acc, now);
             return (
               <a key={key.toBase58()} className={`nav-item ${here === `shift/${key.toBase58()}` ? "on" : ""}`} href={`#/shift/${key.toBase58()}`}>
@@ -155,6 +155,11 @@ function Sidebar({ route }: { route: string[] }) {
               </a>
             );
           })}
+          {shifts.length > 6 && (
+            <a className="nav-item nav-more" href="#/venue">
+              All {shifts.length} shifts
+            </a>
+          )}
         </nav>
       )}
 

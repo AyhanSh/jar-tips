@@ -82,7 +82,7 @@ b { font-weight: 600; }
 /* ---------- shell ---------- */
 .shell { display: grid; grid-template-columns: 248px 1fr; min-height: 100vh; }
 .sidebar {
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  position: sticky; top: 0; height: 100vh; overflow: hidden;
   background: var(--sidebar); border-right: 1px solid var(--line);
   display: flex; flex-direction: column; padding: 10px 8px; gap: 14px;
 }
@@ -94,6 +94,8 @@ b { font-weight: 600; }
 .ws-name { flex: 1; }
 .ws-net { font-size: 11px; font-weight: 500; color: var(--text-2); background: var(--gray-bg); padding: 1px 6px; border-radius: 4px; }
 .nav { display: flex; flex-direction: column; gap: 1px; }
+.nav.shifts { min-height: 0; overflow: hidden; }
+.nav-more { font-size: 13px; color: var(--text-3); }
 .nav-heading { font-size: 12px; font-weight: 500; color: var(--text-3); padding: 4px 8px; }
 .nav-item {
   display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius);
@@ -143,6 +145,18 @@ b { font-weight: 600; }
 .wallet-adapter-button-start-icon { width: 18px; height: 18px; margin-right: 8px; }
 .wallet-adapter-button-start-icon img { width: 18px; height: 18px; }
 .wallet-adapter-dropdown { width: 100%; }
+/* The sidebar doesn't scroll, so the wallet menu opens upward and stays inside it. */
+.wallet-adapter-dropdown-list {
+  top: auto; bottom: 100%; left: 0; right: 0; transform: translateY(-2px);
+  background: var(--surface); box-shadow: var(--shadow); border-radius: 8px; padding: 4px; grid-row-gap: 0;
+  font-family: inherit;
+}
+.wallet-adapter-dropdown-list-active { transform: translateY(-6px); }
+.wallet-adapter-dropdown-list-item {
+  height: 32px; justify-content: flex-start; padding: 0 10px; font-size: 14px; font-weight: 400;
+  color: var(--text); background: none; font-family: inherit;
+}
+.wallet-adapter-dropdown-list-item:not([disabled]):hover { background-color: var(--hover); }
 .wallet-adapter-modal-wrapper { font-family: inherit; }
 
 /* ---------- document ---------- */
