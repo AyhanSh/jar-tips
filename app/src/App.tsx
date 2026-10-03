@@ -5,6 +5,7 @@ import { useActors, type ActorId, type SendResult } from "./actors";
 import { useShiftOwner, useVenue } from "./data";
 import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, parseKey, short, statusOf } from "./solana";
 import { Avatar, Icon, Spinner } from "./ui";
+import { Onboarding, useOnboarding } from "./Onboarding";
 import Overview from "./pages/Overview";
 import Venue from "./pages/Venue";
 import ShiftView from "./pages/ShiftView";
@@ -28,6 +29,8 @@ interface TxCtx {
   tick: number;
 }
 const Tx = createContext<TxCtx>({ run: async () => null, pending: null, tick: 0 });
+/** Opens the first-visit walkthrough again. */
+export const HelpCtx = createContext<() => void>(() => {});
 export const useTx = () => useContext(Tx);
 
 const TOAST_TITLE: Record<Toast["kind"], string> = {
@@ -44,6 +47,7 @@ export default function App() {
   const [pending, setPending] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const busy = useRef(false);
+  const tour = useOnboarding();
 
   const push = useCallback((t: Omit<Toast, "id">) => {
     const id = Date.now() + Math.random();
@@ -92,6 +96,8 @@ export default function App() {
 
   return (
     <Tx.Provider value={{ run, pending, tick }}>
+     <HelpCtx.Provider value={tour.show}>
+      {tour.open && route[0] !== "tip" && <Onboarding onClose={tour.close} />}
       {route[0] === "tip" ? (
         <div className="guest-shell">{page}</div>
       ) : (
@@ -121,6 +127,7 @@ export default function App() {
           </div>
         ))}
       </div>
+     </HelpCtx.Provider>
     </Tx.Provider>
   );
 }
@@ -153,7 +160,7 @@ function Rail({ section }: { section: "home" | "venue" }) {
   return (
     <nav className="rail" aria-label="Main">
       <a className="rail-logo" href="#/" aria-label="Napiwek">
-        <span className="logo-mark">N</span>
+        <img className="logo-img" src="/icons/jar.png" alt="" />
         <span className="rail-label logo-word">Napiwek</span>
       </a>
       <a className={`rail-item ${section === "home" ? "on" : ""}`} href="#/">
@@ -196,10 +203,21 @@ function TopBar({ route, onMenu, browsed }: { route: string[]; onMenu: () => voi
         <span className="badge tone-gray net-badge">devnet</span>
       </nav>
       <div className="topbar-right">
+        <HelpButton />
         <SignerMenu />
         <WalletMultiButton />
       </div>
     </header>
+  );
+}
+
+function HelpButton() {
+  const show = useContext(HelpCtx);
+  return (
+    <button className="btn ghost help-btn" onClick={show} title="Show the walkthrough again">
+      <Icon name="info" size={14} />
+      <span>How it works</span>
+    </button>
   );
 }
 

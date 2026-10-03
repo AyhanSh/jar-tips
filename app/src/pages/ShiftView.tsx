@@ -37,6 +37,7 @@ import {
   type Activity,
   type ShiftAccount,
 } from "../solana";
+import { ART } from "../Onboarding";
 import { Avatar, Callout, CopyButton, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Stat, Tag } from "../ui";
 
 const hm = (minutes: number) => {
@@ -198,9 +199,13 @@ function PayoutBanner({ shiftKey, shift, now }: { shiftKey: PublicKey; shift: Sh
 
   if (shift.settled)
     return (
-      <Callout icon="check" tone="green" title="Paid out">
-        The vault was emptied straight into each person's wallet and then closed. The owner never held this money.
-      </Callout>
+      <div className="success-card">
+        <img src={ART.split} alt="" />
+        <div>
+          <div className="alert-title">Paid out</div>
+          <p className="alert-text">The vault was emptied straight into each person's wallet and then closed. The owner never held this money.</p>
+        </div>
+      </div>
     );
   if (!canSettle(shift, now)) return null;
   return (
@@ -437,9 +442,7 @@ function OwnerPart({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shif
         </>
       )}
       <div className="action-row danger-zone">
-        <span className="danger-icon">
-          <Icon name="shield" size={16} />
-        </span>
+        <img className="row-art" src={ART.shield} alt="" />
         <div className="action-meta">
           <div className="action-title">Security test: try to take the tips</div>
           <p>

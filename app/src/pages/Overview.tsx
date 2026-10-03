@@ -1,39 +1,50 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { useActors } from "../actors";
-import { useTx } from "../App";
+import { HelpCtx, useTx } from "../App";
+import { ART } from "../Onboarding";
 import { useInterval } from "../hooks";
 import { PROGRAM_ID, TIP_MINT, balancesOf, explorerAddr, fromUnits, short } from "../solana";
-import { Avatar, CopyButton, ExtLink, Icon, PageHeader, Panel, Prop, Properties } from "../ui";
+import { Avatar, CopyButton, ExtLink, Icon, Panel, Prop, Properties } from "../ui";
 
 const STEPS = [
-  { icon: "store", title: "Owner opens a shift", text: "Lists who's working. This creates the vault, and it's the last thing the owner controls." },
-  { icon: "qr", title: "Guests tip by QR", text: "Money goes from the guest's wallet straight into the vault. No account, no app." },
-  { icon: "clock", title: "Staff enter their hours", text: "Each person sets their own hours and agrees to everyone's. Any change resets agreement." },
-  { icon: "coins", title: "Anyone pays out", text: "Majority agreed: split by hours. Nobody agreed in time: split equally." },
+  { art: "store", title: "Owner opens a shift", text: "Lists who's working. This creates the vault, and it's the last thing the owner controls." },
+  { art: "phone", title: "Guests tip by QR", text: "Money goes from the guest's wallet straight into the vault. No account, no app." },
+  { art: "clock", title: "Staff enter their hours", text: "Each person sets their own hours and agrees to everyone's. Any change resets agreement." },
+  { art: "split", title: "Anyone pays out", text: "Majority agreed: split by hours. Nobody agreed in time: split equally." },
 ];
 
 export default function Overview() {
+  const showTour = useContext(HelpCtx);
   return (
     <div className="page">
-      <PageHeader
-        title="Overview"
-        description="A tip jar for restaurant staff that the owner can't open. Tips sit in a vault owned by a Solana program, and only the team can be paid from it."
-        actions={
-          <a className="btn primary" href="#/venue">
-            Go to venue <Icon name="chevronRight" size={14} />
-          </a>
-        }
-      />
+      <section className="hero">
+        <div className="hero-glow" />
+        <div className="hero-text">
+          <span className="badge tone-green">Live on Solana devnet</span>
+          <h1 className="hero-title">Tips the owner can't touch.</h1>
+          <p className="hero-desc">
+            Guests tip by QR into a vault owned by a Solana program, not the restaurant. Staff confirm their own hours, and the program
+            pays everyone their share. There's no withdraw button for the owner, because there's no withdraw instruction at all.
+          </p>
+          <div className="row gap">
+            <a className="btn primary" href="#/venue">
+              Go to venue <Icon name="chevronRight" size={14} />
+            </a>
+            <button className="btn" onClick={showTour}>
+              <Icon name="info" size={14} /> How it works
+            </button>
+          </div>
+        </div>
+        <img className="hero-art" src={ART.jar} alt="A locked tip jar" />
+      </section>
 
       <div className="cards4">
         {STEPS.map((s, i) => (
           <div className="card" key={s.title}>
             <div className="card-top">
-              <span className="card-icon">
-                <Icon name={s.icon} size={16} />
-              </span>
-              <span className="card-step">Step {i + 1}</span>
+              <img className="card-art" src={ART[s.art]} alt="" />
+              <span className="card-step">0{i + 1}</span>
             </div>
             <h3 className="card-title">{s.title}</h3>
             <p className="card-text">{s.text}</p>
@@ -43,7 +54,14 @@ export default function Overview() {
 
       <DemoWallets />
 
-      <Panel title="Program" description="Every rule above is enforced here. No admin key, no server.">
+      <Panel
+        title={
+          <span className="title-art">
+            <img src={ART.shield} alt="" /> Program
+          </span>
+        }
+        description="Every rule above is enforced here. No admin key, no server."
+      >
         <Properties>
           <Prop label="Program ID">
             <span className="mono">{PROGRAM_ID.toBase58()}</span>
@@ -82,7 +100,11 @@ function DemoWallets() {
 
   return (
     <Panel
-      title="Demo wallets"
+      title={
+        <span className="title-art">
+          <img src={ART.wallets} alt="" /> Demo wallets
+        </span>
+      }
       description="One laptop plays every role. Your connected wallet is the owner; the rest live in this browser. Choose who signs from the menu in the top bar."
       flush
       footer={

@@ -7,6 +7,7 @@ import { useShift } from "../data";
 import { useInterval, useProgram } from "../hooks";
 import { ata, explorerTx, faucetIxs, fromUnits, ixTip, parseKey, toUnits, tokenBalance, txOf } from "../solana";
 import { Avatar, Icon } from "../ui";
+import { ART } from "../Onboarding";
 
 const PRESETS = [5, 10, 20];
 
@@ -61,9 +62,7 @@ export default function TipPage({ address }: { address: string }) {
   if (done)
     return (
       <TipCard venue={venue?.name}>
-        <div className="done-mark">
-          <Icon name="check" size={22} />
-        </div>
+        <img className="tip-art" src={ART.team} alt="" />
         <h1>Thank you</h1>
         <p>
           Your {done.amount} USDC tip is in the team's pot. It will be shared between {listNames(names)} by the hours they worked.
@@ -81,6 +80,7 @@ export default function TipPage({ address }: { address: string }) {
 
   return (
     <TipCard venue={venue?.name}>
+      <img className="tip-art" src={ART.jar} alt="" />
       <h1>Leave a tip for the team</h1>
       <div className="team-faces">
         <span className="faces">

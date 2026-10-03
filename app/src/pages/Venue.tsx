@@ -19,6 +19,7 @@ import {
   txOf,
 } from "../solana";
 import { Callout, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Tag } from "../ui";
+import { ART } from "../Onboarding";
 
 const WINDOWS = [
   { secs: 60, label: "1 minute (for demos)" },
@@ -83,8 +84,8 @@ export default function Venue({ creating }: { creating: boolean }) {
       <Panel title="Shifts" flush>
         {shifts.length === 0 ? (
           <div className="empty">
-            <Icon name="list" size={20} />
-            <p>No shifts yet. Open one to get a tip QR code.</p>
+            <img className="empty-art" src={ART.store} alt="" />
+            <p>No shifts yet. Open one to get a tip vault and QR code.</p>
             <a className="btn" href="#/venue/new">
               New shift
             </a>
@@ -158,7 +159,13 @@ function CreateVenue({ owner }: { owner: Actor }) {
 
   return (
     <div className="page narrow">
-      <PageHeader title="Create a venue" description="One time per owner wallet. This gives you no rights over any tips." />
+      <div className="intro-card">
+        <img src={ART.store} alt="" />
+        <div>
+          <h1 className="page-title">Create your venue</h1>
+          <p className="page-desc">One time per owner wallet. It records a name and the rules for every shift, and gives you no rights over any tips.</p>
+        </div>
+      </div>
       <Panel
         title="Venue details"
         footer={
