@@ -36,7 +36,6 @@ const WINDOWS = [
   { secs: 3600, label: "1 hour" },
   { secs: 86400, label: "24 hours" },
 ];
-const windowLabel = (s: number) => WINDOWS.find((w) => w.secs === s)?.label ?? `${s} seconds`;
 const shiftName = (r: ShiftRow) => r.acc.label || `Shift ${r.acc.index.toNumber() + 1}`;
 
 export default function Team({ creating }: { creating: boolean }) {
@@ -323,29 +322,6 @@ function TeamHome({ teamKey, team, shifts }: { teamKey: PublicKey; team: TeamAcc
       )}
 
       <TeamPanel teamKey={teamKey} team={team} now={now} />
-
-      <div className="rule-tiles">
-        <div className="rule-tile">
-          <Icon name="users" size={18} />
-          <b>No owner</b>
-          <span>nobody has admin rights</span>
-        </div>
-        <div className="rule-tile">
-          <Icon name="check" size={18} />
-          <b>Majority decides</b>
-          <span>who is on the team</span>
-        </div>
-        <div className="rule-tile">
-          <Icon name="clock" size={18} />
-          <b>{windowLabel(team.confirmWindow.toNumber())}</b>
-          <span>to agree, then equal split</span>
-        </div>
-        <div className="rule-tile no">
-          <Icon name="lock" size={18} />
-          <b>Nobody can withdraw</b>
-          <span>no such instruction exists</span>
-        </div>
-      </div>
     </div>
   );
 }
