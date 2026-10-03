@@ -43,7 +43,7 @@ import {
 } from "../solana";
 import { ART } from "../art";
 import { RoleTag } from "../journey";
-import { Avatar, Callout, CopyButton, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Stat, Tag } from "../ui";
+import { Avatar, Callout, CopyButton, ExtLink, Icon, PageHeader, Panel, Tag } from "../ui";
 
 const hm = (minutes: number) => {
   const h = Math.floor(minutes / 60);
@@ -59,17 +59,14 @@ export default function ShiftView({ address }: { address: string }) {
   const { tick } = useTx();
   const now = useChainNow();
   const { shift, venue, vault } = useShift(key, tick);
+  const [qr, setQr] = useState(false);
 
   if (!key) return <Empty text="That isn't a valid shift address." />;
   if (shift === undefined)
     return (
       <div className="page">
         <div className="skeleton title-skel" />
-        <div className="stats">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="skeleton stat-skel" />
-          ))}
-        </div>
+        <div className="skeleton stat-skel" />
         <div className="skeleton block" />
       </div>
     );
@@ -78,81 +75,81 @@ export default function ShiftView({ address }: { address: string }) {
   const phase = phaseOf(shift, now);
   const st = statusOf(shift, now);
   const pool = shift.settled ? BigInt(shift.paidOut.toString()) : vault;
-  const closesAt = shift.closesAt.toNumber();
-  const fallbackAt = closesAt + shift.confirmWindow.toNumber();
   const majority = hasMajority(shift);
   const equal = !majority && phase === "fallback";
   const shares = shift.settled ? shift.staff.map((s) => BigInt(s.paid.toString())) : previewShares(shift, pool, equal);
   const name = shift.label || `Shift ${shift.index.toNumber() + 1}`;
-
-  const timing =
-    phase === "open"
-      ? { label: "Ends in", value: formatDuration(closesAt - now), sub: `at ${clock(closesAt)}` }
-      : phase === "confirming"
-        ? { label: "Equal split in", value: formatDuration(fallbackAt - now), sub: `ended ${clock(closesAt)}` }
-        : phase === "fallback"
-          ? { label: "Time to agree", value: "Passed", sub: `ended ${clock(closesAt)}` }
-          : { label: "Paid out at", value: clock(shift.settledAt.toNumber()), sub: shift.byTimeout ? "equal split" : "split by hours" };
 
   return (
     <div className="page">
       <PageHeader
         title={name}
         badge={<Tag tone={st.tone}>{st.label}</Tag>}
-        description={
-          <>
-            {venue?.name ?? "Venue"} · shift #{shift.index.toNumber() + 1} · opened {clock(shift.openedAt.toNumber())} · {hm(shift.scheduledMinutes)} scheduled
-          </>
-        }
+        description={`${venue?.name ?? "Venue"} · opened ${clock(shift.openedAt.toNumber())} · ${hm(shift.scheduledMinutes)} shift`}
         actions={
           !shift.settled && (
-            <a className="btn" href={`#/tip/${key.toBase58()}`}>
-              <Icon name="qr" size={14} /> Tip page
-            </a>
+            <button className="btn primary" data-tour="tip-link" onClick={() => setQr(true)}>
+              <Icon name="qr" size={14} /> Show QR
+            </button>
           )
         }
       />
 
-      <div className="stats" data-tour="stats">
-        <Stat icon="coins" label={shift.settled ? "Paid to staff" : "In the vault"} value={<>{fromUnits(pool)} <small>USDC</small></>} sub={`${shift.tipCount} tip${shift.tipCount === 1 ? "" : "s"}`} />
-        <Stat icon="users" label="Agreed" value={<>{confirmations(shift)} <small>/ {shift.staff.length}</small></>} sub={`${needed(shift)} needed for a majority`} />
-        <Stat icon="clock" label={timing.label} value={timing.value} sub={timing.sub} />
-        <Stat icon="activity" label="Split" value={shift.settled ? (shift.byTimeout ? "Equal" : "By hours") : equal ? "Equal" : "By hours"} sub={`version ${shift.version}`} />
-      </div>
+      <Summary shift={shift} pool={pool} phase={phase} now={now} />
 
       <PayoutBanner shiftKey={key} shift={shift} now={now} />
 
       {!shift.settled && <ShiftSteps shiftKey={key} shift={shift} phase={phase} pool={pool} now={now} />}
 
+      <MoreTabs shiftKey={key} shift={shift} phase={phase} pool={pool} shares={shares} onShowQr={() => setQr(true)} />
 
-      <Panel tour="team" title="Team" description={shift.settled ? "Paid." : "Live split by hours."} flush>
-        <Team shift={shift} shares={shares} phase={phase} />
-      </Panel>
+      {qr && <QrFullscreen url={tipUrl(key)} onClose={() => setQr(false)} />}
+    </div>
+  );
+}
 
-      {!shift.settled && <OwnerTools shiftKey={key} shift={shift} phase={phase} pool={pool} />}
-
-      {!shift.settled && <TipLink shiftKey={key} />}
-
-      <div className="two-col">
-        <Panel title="On-chain">
-          <Properties>
-            <Prop label="Vault">
-              <ExtLink href={explorerAddr(vaultOf(key))}>
-                <span className="mono">{short(vaultOf(key), 6)}</span>
-              </ExtLink>
-              <span className="chip"><Icon name="lock" size={11} /> program only</span>
-            </Prop>
-            <Prop label="Shift">
-              <ExtLink href={explorerAddr(key)}>
-                <span className="mono">{short(key, 6)}</span>
-              </ExtLink>
-            </Prop>
-            <OwnerProp shift={shift} />
-          </Properties>
-        </Panel>
+/** One quiet line of numbers: the vault, the agreement, the clock. */
+function Summary({ shift, pool, phase, now }: { shift: ShiftAccount; pool: bigint; phase: string; now: number }) {
+  const closesAt = shift.closesAt.toNumber();
+  const fallbackAt = closesAt + shift.confirmWindow.toNumber();
+  const time =
+    phase === "open"
+      ? { value: formatDuration(closesAt - now), label: "until the shift ends" }
+      : phase === "confirming"
+        ? { value: formatDuration(fallbackAt - now), label: "left to agree" }
+        : phase === "fallback"
+          ? { value: "Over", label: "time to agree" }
+          : { value: clock(shift.settledAt.toNumber()), label: shift.byTimeout ? "paid, equal split" : "paid, by hours" };
+  return (
+    <div className="summary" data-tour="stats">
+      <div className="sum-main">
+        <img src={shift.settled ? ART.split : ART.jar} alt="" />
+        <div>
+          <div className="sum-label">{shift.settled ? "Paid to staff" : "In the vault"}</div>
+          <div className="sum-value">
+            {fromUnits(pool)} <small>USDC</small>
+          </div>
+          <div className="sum-sub">
+            {shift.tipCount} tip{shift.tipCount === 1 ? "" : "s"}
+          </div>
+        </div>
       </div>
-
-      <ActivityFeed shiftKey={key} />
+      <div className="sum-item">
+        <Icon name="users" size={18} />
+        <div>
+          <b>
+            {confirmations(shift)} of {shift.staff.length}
+          </b>
+          <span>agreed · {needed(shift)} needed</span>
+        </div>
+      </div>
+      <div className="sum-item">
+        <Icon name="clock" size={18} />
+        <div>
+          <b>{time.value}</b>
+          <span>{time.label}</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -162,21 +159,6 @@ function Empty({ text }: { text: string }) {
     <div className="page">
       <Callout icon="alert" tone="orange" title={text} />
     </div>
-  );
-}
-
-function OwnerProp({ shift }: { shift: ShiftAccount }) {
-  const { connection } = useConnection();
-  const { tick } = useTx();
-  const [bal, setBal] = useState<bigint | null>(null);
-  useInterval(() => tokenBalance(connection, ata(shift.owner)).then(setBal), 20000, [shift.owner.toBase58(), tick]);
-  return (
-    <Prop label="Owner">
-      <ExtLink href={explorerAddr(shift.owner)}>
-        <span className="mono">{short(shift.owner, 6)}</span>
-      </ExtLink>
-      <span className="chip no"><Icon name="x" size={11} /> no access</span>
-    </Prop>
   );
 }
 
@@ -217,7 +199,6 @@ function Team({ shift, shares, phase }: { shift: ShiftAccount; shares: bigint[];
       <thead>
         <tr>
           <th>Name</th>
-          <th>Wallet</th>
           <th>Hours</th>
           <th>Agreed</th>
           <th className="num">{shift.settled ? "Paid (USDC)" : phase === "open" ? "Share so far" : "Will get"}</th>
@@ -234,10 +215,10 @@ function Team({ shift, shares, phase }: { shift: ShiftAccount; shares: bigint[];
                   <Avatar name={s.name} />
                   {s.name}
                   {me && <Tag tone="blue">you</Tag>}
+                  <a className="icon-btn small" href={explorerAddr(s.wallet)} target="_blank" rel="noreferrer" title={s.wallet.toBase58()}>
+                    <Icon name="external" size={11} />
+                  </a>
                 </span>
-              </td>
-              <td className="mono">
-                <ExtLink href={explorerAddr(s.wallet)}>{short(s.wallet)}</ExtLink>
               </td>
               <td className="mono">{s.submitted ? hm(s.minutes) : <span className="muted">—</span>}</td>
               <td>
@@ -277,36 +258,48 @@ function Step({
   n,
   state,
   title,
+  summary,
   who,
   hint,
   art,
+  open,
+  onToggle,
   children,
 }: {
   n: number;
   state: StepState;
   title: string;
+  summary: string;
   who: React.ReactNode;
   hint?: string;
   art: keyof typeof ART;
+  open: boolean;
+  onToggle: () => void;
   children: React.ReactNode;
 }) {
   return (
-    <section className={`flow-stage ${state}`}>
-      <header className="stage-head">
+    <section className={`flow-stage ${state} ${open ? "open" : ""}`}>
+      <button className="stage-head" onClick={onToggle} aria-expanded={open}>
         <span className="stage-art">
           <img src={ART[art]} alt="" />
           <span className="stage-num">{state === "done" ? <Icon name="check" size={11} /> : n}</span>
         </span>
-        <div className="stage-titles">
-          <div className="stage-title">
-            {title}
-            {state === "current" && <Tag tone="green">now</Tag>}
+        <span className="stage-title">
+          {title}
+          {state === "current" && <Tag tone="green">now</Tag>}
+        </span>
+        <span className="stage-summary">{summary}</span>
+        <Icon name="chevronDown" size={16} className="stage-caret" />
+      </button>
+      {open && (
+        <div className="stage-body">
+          <div className="stage-meta">
+            {who}
+            {hint && <span className="stage-hint">{hint}</span>}
           </div>
-          {hint && <div className="stage-hint">{hint}</div>}
+          {children}
         </div>
-        <div className="stage-who">{who}</div>
-      </header>
-      <div className="stage-body">{children}</div>
+      )}
     </section>
   );
 }
@@ -329,19 +322,26 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
   const preview = previewShares(shift, pool, !hasMajority(shift) && phase === "fallback");
   // Pay out is open to anyone: use the owner if this browser has them, else the guest.
   const payer = owner ?? guest;
+  // Only the current step is open; click another to peek or act early.
+  const [picked, setPicked] = useState<number | null>(null);
+  const shown = picked ?? current;
+  useEffect(() => setPicked(null), [current]); // progress moves the open step along
+  const toggle = (n: number) => () => setPicked(shown === n ? 0 : n);
+  const entered = shift.staff.filter((s) => s.submitted).length;
 
   return (
-    <Panel tour="your-actions" title="What happens next" description="Four steps. Each button acts as the person shown on it." flush>
-      <div className="stepper">
-        {["Collect tips", "Enter hours", "Agree", "Pay out"].map((t, i) => (
-          <span key={t} className={`stepper-item ${state(i + 1)}`}>
-            <b>{state(i + 1) === "done" ? <Icon name="check" size={11} /> : i + 1}</b>
-            {t}
-          </span>
-        ))}
-      </div>
+    <Panel tour="your-actions" title="What happens next" flush>
 
-      <Step n={1} art="phone" state={state(1)} title="Collect tips" who={<RoleTag role="guest">Guests tip · Owner ends shift</RoleTag>} hint={`${shift.tipCount} tips · ${fromUnits(pool)} USDC in the vault`}>
+      <Step
+        n={1}
+        art="phone"
+        state={state(1)}
+        open={shown === 1}
+        onToggle={toggle(1)}
+        title="Collect tips"
+        summary={`${fromUnits(pool)} USDC · ${shift.tipCount} tips`}
+        who={<RoleTag role="guest">Guests tip · Owner ends shift</RoleTag>}
+      >
         <div className="stage-actions">
           <button
             className="btn"
@@ -366,7 +366,17 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         </div>
       </Step>
 
-      <Step n={2} art="clock" state={state(2)} title="Enter hours" who={<RoleTag role="staff">Each person, only their own</RoleTag>} hint={`Max ${hm(shift.scheduledMinutes)} each`}>
+      <Step
+        n={2}
+        art="clock"
+        state={state(2)}
+        open={shown === 2}
+        onToggle={toggle(2)}
+        title="Enter hours"
+        summary={`${entered} of ${shift.staff.length} entered`}
+        who={<RoleTag role="staff">Each person, only their own</RoleTag>}
+        hint={`Max ${hm(shift.scheduledMinutes)} each`}
+      >
         {shift.staff.map((s) => {
           const me = signerFor(s.wallet);
           const id = s.wallet.toBase58();
@@ -406,6 +416,9 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         n={3}
         art="team"
         state={state(3)}
+        open={shown === 3}
+        onToggle={toggle(3)}
+        summary={`${agreed} of ${shift.staff.length} agreed`}
         title="Agree on everyone's hours"
         who={<RoleTag role="staff">{`${agreed} of ${shift.staff.length} agreed · ${needed(shift)} needed`}</RoleTag>}
         hint={open ? "Opens when the shift ends" : "Any change to the hours resets agreement"}
@@ -441,6 +454,9 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         n={4}
         art="split"
         state={state(4)}
+        open={shown === 4}
+        onToggle={toggle(4)}
+        summary={ready ? "Ready" : "Later"}
         title="Pay out"
         who={<RoleTag role="anyone">Anyone can press it</RoleTag>}
         hint={ready ? (hasMajority(shift) ? "Split by hours" : "Nobody agreed in time: equal split") : "After most of the team agrees"}
@@ -463,17 +479,21 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
   );
 }
 
-/** Owner-only controls, clearly separated from the shift steps. */
-function OwnerTools({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint }) {
-  const program = useProgram();
-  const { send, actors } = useActors();
-  const { run, pending } = useTx();
+/** The owner identity this browser can sign as for `shift` (the demo owner during the guide). */
+function useOwnerActor(shift: ShiftAccount) {
+  const { actors } = useActors();
   const signerFor = useSignerFor();
   const demo = useContext(DemoMode);
-  const ownerActor = signerFor(shift.owner) ?? (demo ? actors.find((a) => a.id === "owner") : undefined);
+  return signerFor(shift.owner) ?? (demo ? actors.find((a) => a.id === "owner") : undefined);
+}
+
+/** Owner-only controls, clearly separated from the shift steps. */
+function OwnerTools({ shiftKey, shift, phase, pool, ownerActor }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint; ownerActor: Actor }) {
+  const program = useProgram();
+  const { send } = useActors();
+  const { run, pending } = useTx();
   const [name, setName] = useState("");
   const [wallet, setWallet] = useState("");
-  if (!ownerActor) return null;
   const owner = shift.owner;
   const key = parseKey(wallet);
   const addErr = !name.trim()
@@ -506,15 +526,11 @@ function OwnerTools({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shi
     );
 
   return (
-    <Panel
-      title={
-        <span className="title-art">
-          <Avatar name={ownerActor.name} size={22} /> Owner tools
-        </span>
-      }
-      description={`Acts as ${ownerActor.name}. The owner can add people, never take money.`}
-      flush
-    >
+    <>
+      <div className="tab-intro">
+        <RoleTag role="owner">Acts as {ownerActor.name}</RoleTag>
+        <span className="muted small">Can add people. Can never take money.</span>
+      </div>
       {phase === "open" && (
         <div className="action-row">
           <div className="action-meta">
@@ -544,7 +560,7 @@ function OwnerTools({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shi
           </div>
         </div>
       )}
-      <div className="action-row danger-zone" data-tour="security">
+      <div className="action-row danger-zone">
         <img className="row-art" src={ART.shield} alt="" />
         <div className="action-meta">
           <div className="action-title">Try to steal the tips</div>
@@ -559,51 +575,53 @@ function OwnerTools({ shiftKey, shift, phase, pool }: { shiftKey: PublicKey; shi
           </button>
         </div>
       </div>
-    </Panel>
+    </>
   );
 }
 
-function TipLink({ shiftKey }: { shiftKey: PublicKey }) {
-  const url = tipUrl(shiftKey);
+function useQr(url: string) {
   const [src, setSrc] = useState("");
-  const [big, setBig] = useState(false);
   useEffect(() => {
     QRCode.toDataURL(url, { margin: 1, width: 720, color: { dark: "#171717", light: "#ffffff" } }).then(setSrc);
   }, [url]);
+  return src;
+}
+
+function TipLink({ shiftKey, onShowQr }: { shiftKey: PublicKey; onShowQr: () => void }) {
+  const url = tipUrl(shiftKey);
+  const src = useQr(url);
   const local = /localhost|127\.0\.0\.1/.test(url);
   return (
-    <Panel tour="tip-link" title="Tip QR" description="Scan with a phone to tip.">
-      <div className="qr-block">
-        {src && (
-          <button className="qr-thumb" onClick={() => setBig(true)} title="Show full screen">
-            <img src={src} alt="QR code for the guest tip page" />
-          </button>
+    <div className="qr-block">
+      {src && (
+        <button className="qr-thumb" onClick={onShowQr} title="Show full screen">
+          <img src={src} alt="QR code for the guest tip page" />
+        </button>
+      )}
+      <div className="qr-side">
+        <code className="code-line">{url.replace(/^https?:\/\//, "")}</code>
+        {local && (
+          <p className="field-err">
+            <Icon name="alert" size={12} /> Points to localhost, so phones can't open it. Set VITE_PUBLIC_URL.
+          </p>
         )}
-        <div className="qr-side">
-          <code className="code-line">{url.replace(/^https?:\/\//, "")}</code>
-          {local && (
-            <p className="field-err">
-              <Icon name="alert" size={12} /> Points to localhost, so phones can't open it. Set VITE_PUBLIC_URL.
-            </p>
-          )}
-          <div className="row gap">
-            <button className="btn primary" onClick={() => setBig(true)}>
-              <Icon name="qr" size={14} /> Show QR
-            </button>
-            <a className="btn" href={`#/tip/${shiftKey.toBase58()}`}>
-              Open here
-            </a>
-            <CopyButton text={url} label="Copy link" />
-          </div>
+        <div className="row gap">
+          <button className="btn primary" onClick={onShowQr}>
+            <Icon name="qr" size={14} /> Full screen
+          </button>
+          <a className="btn" href={`#/tip/${shiftKey.toBase58()}`}>
+            Open tip page
+          </a>
+          <CopyButton text={url} label="Copy link" />
         </div>
       </div>
-      {big && src && <QrFullscreen src={src} url={url} onClose={() => setBig(false)} />}
-    </Panel>
+    </div>
   );
 }
 
 /** Projector view: a big QR the audience can scan from their seats. */
-function QrFullscreen({ src, url, onClose }: { src: string; url: string; onClose: () => void }) {
+function QrFullscreen({ url, onClose }: { url: string; onClose: () => void }) {
+  const src = useQr(url);
   useEffect(() => {
     const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", key);
@@ -617,7 +635,7 @@ function QrFullscreen({ src, url, onClose }: { src: string; url: string; onClose
         </button>
         <img src={ART.phone} alt="" className="qr-full-art" />
         <h2>Scan to tip the team</h2>
-        <img className="qr-full-code" src={src} alt="QR code for the guest tip page" />
+        {src && <img className="qr-full-code" src={src} alt="QR code for the guest tip page" />}
         <div className="qr-full-steps">
           <span><b>1</b> Scan</span>
           <Icon name="arrowRight" size={14} />
@@ -628,6 +646,80 @@ function QrFullscreen({ src, url, onClose }: { src: string; url: string; onClose
         <code className="code-line">{url.replace(/^https?:\/\//, "")}</code>
       </div>
     </div>
+  );
+}
+
+/** Everything that isn't the next action, one tab at a time. */
+function MoreTabs({
+  shiftKey,
+  shift,
+  phase,
+  pool,
+  shares,
+  onShowQr,
+}: {
+  shiftKey: PublicKey;
+  shift: ShiftAccount;
+  phase: string;
+  pool: bigint;
+  shares: bigint[];
+  onShowQr: () => void;
+}) {
+  const ownerActor = useOwnerActor(shift);
+  const tabs = [
+    { id: "team", label: "Team", icon: "users" },
+    ...(!shift.settled ? [{ id: "qr", label: "Tip QR", icon: "qr" }] : []),
+    ...(!shift.settled && ownerActor ? [{ id: "owner", label: "Owner tools", icon: "shield", tour: "security" }] : []),
+    { id: "activity", label: "Activity", icon: "activity" },
+  ];
+  const [tab, setTab] = useState("team");
+  return (
+    <section className="panel tabs-panel" data-tour="team">
+      <div className="tabs" role="tablist">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`tab ${tab === t.id ? "on" : ""} ${t.id === "owner" ? "tab-owner" : ""}`}
+            data-tour={(t as { tour?: string }).tour}
+            onClick={() => setTab(t.id)}
+          >
+            <Icon name={t.icon} size={14} /> {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="tab-body">
+        {tab === "team" && <Team shift={shift} shares={shares} phase={phase} />}
+        {tab === "qr" && <TipLink shiftKey={shiftKey} onShowQr={onShowQr} />}
+        {tab === "owner" && ownerActor && <OwnerTools shiftKey={shiftKey} shift={shift} phase={phase} pool={pool} ownerActor={ownerActor} />}
+        {tab === "activity" && (
+          <>
+            <div className="onchain">
+              <span>
+                <Icon name="lock" size={13} /> Vault{" "}
+                <ExtLink href={explorerAddr(vaultOf(shiftKey))}>
+                  <span className="mono">{short(vaultOf(shiftKey))}</span>
+                </ExtLink>
+              </span>
+              <span>
+                Shift{" "}
+                <ExtLink href={explorerAddr(shiftKey)}>
+                  <span className="mono">{short(shiftKey)}</span>
+                </ExtLink>
+              </span>
+              <span>
+                Owner{" "}
+                <ExtLink href={explorerAddr(shift.owner)}>
+                  <span className="mono">{short(shift.owner)}</span>
+                </ExtLink>
+              </span>
+            </div>
+            <ActivityFeed shiftKey={shiftKey} />
+          </>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -653,7 +745,7 @@ function ActivityFeed({ shiftKey }: { shiftKey: PublicKey }) {
     [shiftKey.toBase58(), tick, demo],
   );
   return (
-    <Panel title="Activity" flush>
+    <>
       {items === null ? (
         <div className="empty small">Loading from devnet…</div>
       ) : (
@@ -684,6 +776,6 @@ function ActivityFeed({ shiftKey }: { shiftKey: PublicKey }) {
           </tbody>
         </table>
       )}
-    </Panel>
+    </>
   );
 }

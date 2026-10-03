@@ -132,8 +132,8 @@ devnet keypairs kept in the browser. You pick who signs from **Signing as** at t
 
 1. **Overview → Fund demo wallets** (0.02 SOL to each low wallet, 200 test USDC to the guest)
 2. **Venue → Create venue** (time to agree: 1 minute) → **New shift** "Friday dinner", 8 h, *Use demo crew* → **Open shift**
-3. Shift page → **Tip link → Open tip page** (or scan the QR) → sign as **Guest** → tip 10 and 20 USDC
-4. Back on the shift page as the **owner** → *Your part* → open **Try to take the tips (security test)** → both buttons → open the Explorer links: **failed on-chain**
+3. Shift page → step 1 **Tip as Guest** (or **Show QR** and scan it) → tip 10 and 20 USDC
+4. Back on the shift page → **Owner tools** tab → both "try to steal" buttons → open the Explorer links: **failed on-chain**
 5. **End shift** → sign as Ana / Ben / Kasia → enter 8 / 6 / 4 hours → Ana and Ben press **I agree** (2 of 3)
 6. Sign as **Guest** (not staff, not owner) → **Pay out now** → Ana 13.33 · Ben 10.00 · Kasia 6.67 · owner +0 → open in Explorer
 

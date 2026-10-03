@@ -22,11 +22,11 @@
 - **New shift** "Friday dinner", 8 h, *Use demo crew* → **Open shift** → Phantom approves → the shift page opens.
 > "This is the last thing the owner controls. The vault you see here belongs to a program address. Nobody holds a key to it."
 
-**1:00–1:25 · Guest tips by QR** *(Tip link → Open tip page, sign as Guest)*
+**1:00–1:25 · Guest tips by QR** *(step 1 → **Tip as Guest**, or **Show QR** and scan with a phone)*
 - Tip 20 USDC → thank-you screen → "See the receipt" (Explorer: the destination is the vault, not the owner).
 > "No account, no app. The money goes from the guest's wallet straight into the shift vault."
 
-**1:25–1:55 · THE MOMENT: the owner tries to take it** *(back to the shift page, sign as owner → Your part → Try to take the tips)*
+**1:25–1:55 · THE MOMENT: the owner tries to take it** *(shift page → **Owner tools** tab)*
 - Click **Withdraw … from the vault** → approve → notification "Blocked on-chain: … owner does not match" → **View**: failed tx on Explorer.
 - Click **Send Ana's share to me** → "Payout account does not belong to the staff member…" → **View** on Explorer.
 > "Both are real transactions. They land on-chain and fail. There's no withdraw instruction in the program, and the payout can only go to the people on the roster."
