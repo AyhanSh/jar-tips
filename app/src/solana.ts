@@ -61,6 +61,20 @@ export const short = (a: PublicKey | string, n = 4) => {
   return `${s.slice(0, n)}…${s.slice(-n)}`;
 };
 
+export const MAX_STAFF = 12;
+export const MAX_NAME_BYTES = 32;
+export const MAX_STAFF_NAME_BYTES = 16;
+/** The program limits names in bytes, not characters ("ł" is two bytes). */
+export const byteLen = (s: string) => new TextEncoder().encode(s).length;
+
+export function parseKey(s: string): PublicKey | null {
+  try {
+    return new PublicKey(s.trim());
+  } catch {
+    return null;
+  }
+}
+
 export const toUnits = (amount: number) => new BN(Math.round(amount * 10 ** DECIMALS));
 export const fromUnits = (v: BN | bigint | number) =>
   (Number(v.toString()) / 10 ** DECIMALS).toLocaleString("en-US", {
@@ -108,6 +122,23 @@ export function phaseOf(shift: ShiftAccount, now: number): Phase {
 }
 
 export const hasMajority = (shift: ShiftAccount) => confirmations(shift) * 2 > shift.staff.length;
+export const needed = (shift: ShiftAccount) => Math.floor(shift.staff.length / 2) + 1;
+
+/** Can `settle` succeed right now? Mirrors the checks at the top of `settle` in lib.rs. */
+export const canSettle = (shift: ShiftAccount, now: number) => {
+  const phase = phaseOf(shift, now);
+  return (phase !== "open" && phase !== "settled" && hasMajority(shift)) || phase === "fallback";
+};
+
+/** One human status for a shift, used in lists and on the shift page. */
+export function statusOf(shift: ShiftAccount, now: number): { label: string; tone: "gray" | "blue" | "green" | "orange" | "yellow" } {
+  const phase = phaseOf(shift, now);
+  if (phase === "settled") return { label: "Paid out", tone: "green" };
+  if (phase === "open") return { label: "Open for tips", tone: "blue" };
+  if (hasMajority(shift)) return { label: "Ready to pay out", tone: "orange" };
+  if (phase === "fallback") return { label: "Ready: equal split", tone: "orange" };
+  return { label: "Confirming hours", tone: "yellow" };
+}
 
 /** Same rule as `split` in lib.rs: floor pro-rata, dust to the heaviest weight. */
 export function split(pool: bigint, weights: bigint[]): bigint[] {
@@ -152,22 +183,17 @@ export async function ixOpenShift(
 ) {
   const venue = venuePda(owner);
   const shift = shiftPda(venue, index);
+  // Staff token accounts are not created here: with a full roster that would not fit in one
+  // transaction. Whoever pays out creates any missing ones first (see missingAtaIxs).
   const ix = await p.methods
     .openShift(label, minutes, staff)
     .accountsPartial({ owner, venue, mint: TIP_MINT, shift, vault: vaultOf(shift), tokenProgram: TOKEN_PROGRAM })
     .instruction();
-  // Staff token accounts are created up front (owner pays a little rent) so payouts never fail.
-  const atas = staff.map((s) =>
-    createAssociatedTokenAccountIdempotentInstruction(owner, ata(s.wallet), s.wallet, TIP_MINT),
-  );
-  return { ixs: [...atas, ix], shift };
+  return { ix, shift };
 }
 
 export async function ixAddStaff(p: NapiwekProgram, owner: PublicKey, shift: PublicKey, wallet: PublicKey, name: string) {
-  return [
-    createAssociatedTokenAccountIdempotentInstruction(owner, ata(wallet), wallet, TIP_MINT),
-    await p.methods.addStaff(wallet, name).accountsPartial({ owner, shift }).instruction(),
-  ];
+  return p.methods.addStaff(wallet, name).accountsPartial({ owner, shift }).instruction();
 }
 
 export async function ixEndShift(p: NapiwekProgram, owner: PublicKey, shift: PublicKey) {
@@ -198,16 +224,26 @@ export async function ixSettle(
   payTo?: PublicKey[],
 ) {
   const targets = payTo ?? shift.staff.map((s) => ata(s.wallet));
-  // If a staff member closed their token account, recreate it so the payout can't be blocked.
-  const atas = shift.staff.map((s) =>
-    createAssociatedTokenAccountIdempotentInstruction(caller, ata(s.wallet), s.wallet, TIP_MINT),
-  );
-  const ix = await p.methods
+  return p.methods
     .settle()
     .accountsPartial({ caller, shift: shiftKey, owner: shift.owner, mint: TIP_MINT, vault: vaultOf(shiftKey), tokenProgram: TOKEN_PROGRAM })
     .remainingAccounts(targets.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })))
     .instruction();
-  return payTo ? [ix] : [...atas, ix];
+}
+
+/**
+ * Create-account instructions for any staff token account that doesn't exist yet (never
+ * opened, or closed by its owner), in chunks small enough for one transaction each.
+ * Run before `settle` so a missing account can never block the payout.
+ */
+export async function missingAtaIxs(connection: Connection, payer: PublicKey, wallets: PublicKey[]) {
+  const infos = await connection.getMultipleAccountsInfo(wallets.map(ata));
+  const ixs = wallets
+    .filter((_, i) => !infos[i])
+    .map((w) => createAssociatedTokenAccountIdempotentInstruction(payer, ata(w), w, TIP_MINT));
+  const chunks: TransactionInstruction[][] = [];
+  for (let i = 0; i < ixs.length; i += 4) chunks.push(ixs.slice(i, i + 4));
+  return chunks;
 }
 
 /** The owner tries to move tips out of the vault directly with the Token program. */
@@ -256,14 +292,14 @@ export interface Activity {
 }
 
 const IX_LABELS: Record<string, string> = {
-  OpenShift: "Shift opened, vault created",
-  AddStaff: "Staff added",
+  OpenShift: "Shift opened",
+  AddStaff: "Person added",
   EndShift: "Shift ended",
   Tip: "Tip received",
-  SubmitHours: "Hours submitted",
-  Confirm: "Hours confirmed",
-  Settle: "Tips paid out",
-  TransferChecked: "Direct withdrawal attempt",
+  SubmitHours: "Hours entered",
+  Confirm: "Agreed to hours",
+  Settle: "Paid out",
+  TransferChecked: "Owner tried to withdraw",
 };
 
 // Transactions are immutable, so each one is fetched once and cached.
@@ -280,8 +316,8 @@ export async function loadActivity(connection: Connection, address: PublicKey): 
     const ix = logs.map((l) => /Program log: Instruction: (\w+)/.exec(l)?.[1]).find((n) => n && IX_LABELS[n]);
     const all = logs.join("\n");
     let action = ix ? IX_LABELS[ix] : "Transaction";
-    if (/owner does not match/.test(all)) action = "Direct withdrawal attempt";
-    else if (/WrongPayoutAccount/.test(all)) action = "Payout redirect attempt";
+    if (/owner does not match/.test(all)) action = "Owner tried to withdraw";
+    else if (/WrongPayoutAccount/.test(all)) action = "Someone tried to redirect a share";
     else if (tx.meta?.err && ix === "Settle") action = "Payout attempt";
     txCache.set(s.signature, {
       action,

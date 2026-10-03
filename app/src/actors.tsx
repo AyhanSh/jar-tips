@@ -14,7 +14,6 @@ export interface Actor {
   id: ActorId;
   name: string;
   role: string;
-  emoji: string;
   publicKey: PublicKey | null;
   keypair?: Keypair;
 }
@@ -25,12 +24,12 @@ export interface SendResult {
   reason?: string;
 }
 
-const DEMO: { id: Exclude<ActorId, "wallet">; name: string; role: string; emoji: string }[] = [
-  { id: "owner", name: "Demo owner", role: "backup owner", emoji: "🏪" },
-  { id: "ana", name: "Ana", role: "waiter", emoji: "🧑‍🍳" },
-  { id: "ben", name: "Ben", role: "bartender", emoji: "🍸" },
-  { id: "kasia", name: "Kasia", role: "runner", emoji: "🏃‍♀️" },
-  { id: "guest", name: "Guest", role: "customer", emoji: "🙂" },
+const DEMO: { id: Exclude<ActorId, "wallet">; name: string; role: string }[] = [
+  { id: "owner", name: "Demo owner", role: "Owner (backup)" },
+  { id: "ana", name: "Ana", role: "Waiter" },
+  { id: "ben", name: "Ben", role: "Bartender" },
+  { id: "kasia", name: "Kasia", role: "Runner" },
+  { id: "guest", name: "Guest", role: "Customer" },
 ];
 
 const STORE = "napiwek.demo-keys.v1";
@@ -87,6 +86,8 @@ interface Ctx {
   active: Actor;
   setActive: (id: ActorId) => void;
   actorFor: (pk: PublicKey) => Actor | undefined;
+  /** The identity that plays the venue owner: the browser wallet, or the demo owner when last chosen. */
+  owner: Actor;
   /** Sign and send as the active actor (or `as`). `expectFail` skips preflight so a rejected tx lands on-chain. */
   send: (tx: Transaction, opts?: { as?: Actor; signers?: Keypair[]; expectFail?: boolean }) => Promise<SendResult>;
   fundCrew: () => Promise<string>;
@@ -99,6 +100,13 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   const { connection } = useConnection();
   const wallet = useWallet();
   const keys = useMemo(loadDemoKeys, []);
+  const [ownerId, setOwnerId] = useState<"wallet" | "owner">(() => {
+    try {
+      return localStorage.getItem(STORE + ".active") === "owner" ? "owner" : "wallet";
+    } catch {
+      return "wallet";
+    }
+  });
   const [activeId, setActiveId] = useState<ActorId>(() => {
     try {
       return (localStorage.getItem(STORE + ".active") as ActorId) || "wallet";
@@ -108,6 +116,7 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   });
   const setActive = useCallback((id: ActorId) => {
     setActiveId(id);
+    if (id === "wallet" || id === "owner") setOwnerId(id);
     try {
       localStorage.setItem(STORE + ".active", id);
     } catch {
@@ -117,12 +126,13 @@ export function ActorProvider({ children }: { children: ReactNode }) {
 
   const actors: Actor[] = useMemo(
     () => [
-      { id: "wallet", name: "My wallet", role: "owner", emoji: "👛", publicKey: wallet.publicKey },
+      { id: "wallet", name: "My wallet", role: "Owner", publicKey: wallet.publicKey },
       ...DEMO.map((d) => ({ ...d, publicKey: keys[d.id].publicKey, keypair: keys[d.id] })),
     ],
     [wallet.publicKey, keys],
   );
   const active = actors.find((a) => a.id === activeId) ?? actors[0];
+  const owner = actors.find((a) => a.id === ownerId) ?? actors[0];
   const actorFor = useCallback(
     (pk: PublicKey) => actors.find((a) => a.publicKey?.equals(pk)),
     [actors],
@@ -180,12 +190,14 @@ export function ActorProvider({ children }: { children: ReactNode }) {
     }
     const { ixs, faucet } = faucetIxs(from, keys.guest.publicKey, 200_000_000n);
     tx.add(...ixs);
+    if ((await connection.getBalance(from)) < 0.12 * LAMPORTS_PER_SOL)
+      throw new Error("Your wallet needs about 0.12 devnet SOL to fund the demo wallets");
     const r = await send(tx, { as: actors[0], signers: [faucet] });
     if (r.failed) throw new Error(r.reason);
     return r.signature;
   }, [wallet.publicKey, connection, keys, send, actors]);
 
   return (
-    <ActorCtx.Provider value={{ actors, active, setActive, actorFor, send, fundCrew }}>{children}</ActorCtx.Provider>
+    <ActorCtx.Provider value={{ actors, active, setActive, actorFor, owner, send, fundCrew }}>{children}</ActorCtx.Provider>
   );
 }

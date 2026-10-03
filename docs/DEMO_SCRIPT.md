@@ -2,8 +2,8 @@
 
 ## Before you record / go live
 - [ ] `app/.env.local` has a private devnet RPC (`VITE_RPC_URL=…`). The public RPC returns HTTP 429 under demo load.
-- [ ] Phantom on **devnet**, owner wallet with ≥ 0.2 SOL. Home → **Fund crew from my wallet** done (Ana/Ben/Kasia/Guest have SOL, Guest has USDC).
-  No browser wallet? `npx tsx scripts/fund.ts <addresses…>` and act as 🏪 Demo owner.
+- [ ] Phantom on **devnet**, owner wallet with ≥ 0.2 SOL. Overview → **Fund demo wallets** done (Ana/Ben/Kasia/Guest have SOL, Guest has USDC).
+  No browser wallet? `npx tsx scripts/fund.ts <addresses…>` and sign as Demo owner.
 - [ ] Venue already registered with the **1 minute** confirm window, so you don't burn demo time on it.
 - [ ] Two tabs ready: the app, and Solana Explorer (devnet).
 - [ ] Program made immutable (`solana program set-upgrade-authority APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X --final`), then show "Upgradeable: No" on Explorer.
@@ -16,24 +16,24 @@
 **0:20–0:35 · Who it's for**
 > "Napiwek is for waiters, bartenders and runners in Polish restaurants who pool tips per shift. Three people tonight: Ana, Ben and Kasia."
 
-**0:35–1:00 · Owner opens a shift** *(Owner page, connected wallet)*
-- Open shift "Friday dinner", 8 h, "Use demo crew" → Phantom approves → board opens.
+**0:35–1:00 · Owner opens a shift** *(Venue page, connected wallet)*
+- **New shift** "Friday dinner", 8 h, *Use demo crew* → **Open shift** → Phantom approves → the shift page opens.
 > "This is the last thing the owner controls. The vault you see here belongs to a program address. Nobody holds a key to it."
 
-**1:00–1:25 · Guest tips by QR** *(QR card → tip page, act as Guest)*
+**1:00–1:25 · Guest tips by QR** *(Tip link → Open tip page, sign as Guest)*
 - Tip 20 USDC → thank-you screen → "See the receipt" (Explorer: the destination is the vault, not the owner).
 > "No account, no app. The money goes from the guest's wallet straight into the shift vault."
 
-**1:25–1:55 · THE MOMENT: the owner tries to take it** *(back to board, act as owner)*
-- Click **Withdraw … from the vault** → approve → toast "Rejected by Solana: owner does not match" → open in Explorer: failed tx.
-- Click **Pay out, but send Ana's share to me** → "WrongPayoutAccount" → Explorer.
+**1:25–1:55 · THE MOMENT: the owner tries to take it** *(back to the shift page, sign as owner → Your part → Try to take the tips)*
+- Click **Withdraw … from the vault** → approve → notification "Blocked on-chain: … owner does not match" → **View**: failed tx on Explorer.
+- Click **Send Ana's share to me** → "Payout account does not belong to the staff member…" → **View** on Explorer.
 > "Both are real transactions. They land on-chain and fail. There's no withdraw instruction in the program, and the payout can only go to the people on the roster."
 
-**1:55–2:25 · Staff confirm** *(End shift now → act as Ana/Ben/Kasia)*
-- Ana 8 h, Ben 6 h, Kasia 4 h → Ana confirms → Ben confirms → meter turns green "2 of 3".
+**1:55–2:25 · Staff confirm** *(End shift → sign as Ana/Ben/Kasia)*
+- Ana 8, Ben 6, Kasia 4 hours → Ana **I agree** → Ben **I agree** → "2 of 3 agreed", the payout banner appears.
 > "Each person enters only their own hours. If anyone changes a number, every sign-off resets. More than half have to agree."
 
-**2:25–2:45 · Anyone pays out** *(act as Guest)*
+**2:25–2:45 · Anyone pays out** *(sign as Guest)*
 - **Pay out now** → shares appear, Explorer shows three transfers in one transaction. Owner's balance unchanged.
 > "Pressed by a guest, not the owner and not us. If nobody had agreed within the window, anyone could trigger an equal split instead, so the pot can't be held hostage."
 

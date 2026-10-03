@@ -1,42 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { useConnection } from "@solana/wallet-adapter-react";
-import { PublicKey } from "@solana/web3.js";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useActors } from "../actors";
-import { useToast } from "../App";
+import { SignerMenu, useTx } from "../App";
+import { useShift } from "../data";
 import { useInterval, useProgram } from "../hooks";
-import {
-  ata,
-  explorerTx,
-  faucetIxs,
-  fromUnits,
-  ixTip,
-  toUnits,
-  tokenBalance,
-  txOf,
-  type ShiftAccount,
-  type VenueAccount,
-} from "../solana";
+import { ata, explorerTx, faucetIxs, fromUnits, ixTip, parseKey, toUnits, tokenBalance, txOf } from "../solana";
+import { Avatar, Icon } from "../ui";
 
 const PRESETS = [5, 10, 20];
 
 export default function TipPage({ address }: { address: string }) {
-  const key = useMemo(() => {
-    try {
-      return new PublicKey(address);
-    } catch {
-      return null;
-    }
-  }, [address]);
+  const key = useMemo(() => parseKey(address), [address]);
   const program = useProgram();
   const { connection } = useConnection();
   const { active, actors, setActive, send } = useActors();
-  const { run, tick } = useToast();
-  const [shift, setShift] = useState<ShiftAccount | null | undefined>(undefined);
-  const [venue, setVenue] = useState<VenueAccount | null>(null);
+  const { run, pending, tick } = useTx();
+  const { shift, venue } = useShift(key, tick);
   const [amount, setAmount] = useState(10);
   const [custom, setCustom] = useState("");
   const [bal, setBal] = useState<bigint | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<{ sig: string; amount: number } | null>(null);
 
   // Without a connected wallet, the demo guest is the natural customer.
   useEffect(() => {
@@ -45,25 +29,21 @@ export default function TipPage({ address }: { address: string }) {
 
   useInterval(
     async () => {
-      if (!key) return;
-      const s = await program.account.shift.fetchNullable(key);
-      setShift(s);
-      if (s && !venue) program.account.venue.fetchNullable(s.venue).then(setVenue);
-    },
-    10000,
-    [key?.toBase58()],
-  );
-  useInterval(
-    async () => {
       if (active.publicKey) setBal(await tokenBalance(connection, ata(active.publicKey)));
     },
-    8000,
+    10000,
     [active.publicKey?.toBase58(), tick],
   );
 
-  if (!key) return <div className="card narrow center">This QR code doesn't point to a valid shift.</div>;
-  if (shift === undefined) return <div className="card narrow center muted">Loading…</div>;
-  if (shift === null) return <div className="card narrow center">Shift not found.</div>;
+  if (!key) return <TipCard><p className="muted">This QR code doesn't point to a valid shift.</p></TipCard>;
+  if (shift === undefined)
+    return (
+      <TipCard>
+        <div className="skeleton title-skel" />
+        <div className="skeleton" />
+      </TipCard>
+    );
+  if (shift === null) return <TipCard><p className="muted">This shift doesn't exist.</p></TipCard>;
 
   const value = custom ? Number(custom) : amount;
   const units = toUnits(value || 0);
@@ -72,55 +52,68 @@ export default function TipPage({ address }: { address: string }) {
 
   if (shift.settled)
     return (
-      <div className="tip-card">
+      <TipCard venue={venue?.name}>
         <h1>This shift is closed</h1>
-        <p className="muted">Its tips have already been paid out to the team. Ask your server for today's QR code.</p>
-      </div>
+        <p className="muted">Its tips have already been paid out to the team. Ask your server for today's code.</p>
+      </TipCard>
     );
 
   if (done)
     return (
-      <div className="tip-card thanks">
-        <div className="emoji">🙏</div>
-        <h1>Thank you!</h1>
+      <TipCard venue={venue?.name}>
+        <div className="done-mark">
+          <Icon name="check" size={22} />
+        </div>
+        <h1>Thank you</h1>
         <p>
-          Your tip is in the team's pot. It will be shared between <b>{listNames(names)}</b> by the hours they worked.
+          Your {done.amount} USDC tip is in the team's pot. It will be shared between {listNames(names)} by the hours they worked.
         </p>
-        <p className="muted small">The restaurant can't withdraw it. This is enforced by code, not by a promise.</p>
-        <a href={explorerTx(done)} target="_blank" rel="noreferrer" className="btn ghost small">
-          See the receipt ↗
-        </a>
-        <button className="btn ghost small" onClick={() => setDone(null)}>
-          Tip again
-        </button>
-      </div>
+        <div className="tip-actions">
+          <a className="btn" href={explorerTx(done.sig)} target="_blank" rel="noreferrer">
+            Receipt <Icon name="external" size={12} />
+          </a>
+          <button className="btn ghost" onClick={() => setDone(null)}>
+            Tip again
+          </button>
+        </div>
+      </TipCard>
     );
 
   return (
-    <div className="tip-card">
-      <span className="eyebrow">{venue?.name ?? "…"}</span>
-      <h1>Tip the team</h1>
-      <p className="muted">
-        {shift.label} · {listNames(names)}
-      </p>
+    <TipCard venue={venue?.name}>
+      <h1>Leave a tip for the team</h1>
+      <div className="team-faces">
+        <span className="faces">
+          {shift.staff.slice(0, 5).map((s) => (
+            <Avatar key={s.wallet.toBase58()} name={s.name} seed={s.wallet.toBase58()} size={28} />
+          ))}
+        </span>
+        <span className="muted">
+          {shift.label ? `${shift.label} · ` : ""}
+          {listNames(names)}
+        </span>
+      </div>
 
-      <div className="amounts">
+      <div className="amounts" role="radiogroup" aria-label="Tip amount">
         {PRESETS.map((p) => (
           <button
             key={p}
+            role="radio"
+            aria-checked={!custom && amount === p}
             className={`amount ${!custom && amount === p ? "on" : ""}`}
             onClick={() => {
               setAmount(p);
               setCustom("");
             }}
           >
-            {p} <small>USDC</small>
+            {p}
           </button>
         ))}
         <input
           className={`amount ${custom ? "on" : ""}`}
           placeholder="Other"
           inputMode="decimal"
+          aria-label="Other amount"
           value={custom}
           onChange={(e) => setCustom(e.target.value.replace(/[^0-9.]/g, ""))}
         />
@@ -128,48 +121,66 @@ export default function TipPage({ address }: { address: string }) {
 
       <button
         className="btn primary pay"
-        disabled={!active.publicKey || !(value > 0) || !enough}
+        disabled={!active.publicKey || !(value > 0) || !enough || !!pending}
         onClick={() =>
           run("Tip", async () => {
             const r = await send(txOf(await ixTip(program, active.publicKey!, key, units)));
-            if (!r.failed) setDone(r.signature);
+            if (!r.failed) setDone({ sig: r.signature, amount: value });
             return r;
           })
         }
       >
-        Tip {value > 0 ? value : ""} USDC
+        {pending === "Tip" ? "Sending…" : `Tip ${value > 0 ? value : ""} USDC`}
       </button>
 
-      <div className="promise">
-        <span>🔒</span>
-        <span>
-          100% goes to the people who served you. The money sits in a vault the owner has no key to, and is split by the hours each
-          person confirms.
-        </span>
-      </div>
+      <p className="fine">
+        <Icon name="lock" size={13} />
+        Goes into a shared pot only the team can be paid from. The restaurant can't withdraw it.
+      </p>
 
-      <div className="wallet-line muted small">
+      <div className="tip-foot">
         {active.publicKey ? (
-          <>
-            Paying as {active.emoji} {active.name} · balance {bal === null ? "…" : fromUnits(bal)} USDC
+          <span className="muted small">
+            Balance {bal === null ? "…" : fromUnits(bal)} USDC
             {bal !== null && !enough && (
-              <button
-                className="btn ghost small"
-                onClick={() =>
-                  run("Get test USDC", async () => {
-                    const { ixs, faucet } = faucetIxs(active.publicKey!, active.publicKey!, 50_000_000n);
-                    return send(txOf(...ixs), { signers: [faucet] });
-                  })
-                }
-              >
-                + 50 test USDC
-              </button>
+              <>
+                {" · "}
+                <button
+                  className="link-btn"
+                  disabled={!!pending}
+                  onClick={() =>
+                    run("Get test USDC", async () => {
+                      const { ixs, faucet } = faucetIxs(active.publicKey!, active.publicKey!, 50_000_000n);
+                      return send(txOf(...ixs), { signers: [faucet] });
+                    })
+                  }
+                >
+                  get 50 test USDC
+                </button>
+              </>
             )}
-          </>
+          </span>
         ) : (
-          "Connect a wallet to tip"
+          <span className="muted small">Connect a wallet to tip</span>
         )}
+        <div className="tip-who">
+          <SignerMenu only={["wallet", "guest"]} />
+          {!actors[0].publicKey && <WalletMultiButton />}
+        </div>
       </div>
+    </TipCard>
+  );
+}
+
+function TipCard({ venue, children }: { venue?: string; children: React.ReactNode }) {
+  return (
+    <div className="tip-wrap">
+      <div className="tip-venue">
+        <span className="ws-mark">{(venue ?? "N")[0]}</span>
+        {venue ?? "Napiwek"}
+      </div>
+      <div className="tip-card">{children}</div>
+      <div className="tip-powered muted small">Napiwek · Solana devnet</div>
     </div>
   );
 }

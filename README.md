@@ -99,6 +99,10 @@ A tip-splitting app on a database (several exist) still has an operator who hold
   with a venue code) is on the roadmap.
 - **Hours are self-reported**, checked by peers. A greedy waiter can inflate theirs, but the majority won't confirm, and the fallback is an equal split, so inflating doesn't pay.
 - **Names are on-chain.** First names or nicknames only, max 16 bytes.
+- **Known issue, fixed in the next upgrade:** the next shift's vault address is predictable, so a griefer could create that token account
+  first and make `open_shift` fail for that venue (`init` requires a fresh account). The fix is `init_if_needed` on the vault. It's safe because
+  the account's only authority is still the shift PDA. Funds are never at risk; it only blocks opening new shifts.
+- **Pooled tips only.** A QR tips the whole shift, not one waiter. Personal tips (per-waiter QR, 100% to that person) are a planned extension.
 - **Off-ramp.** Staff receive USDC; turning it into złoty is a separate step (exchange, or a stablecoin card). The demo uses a devnet test USDC with a public faucet.
 
 ---
@@ -106,15 +110,15 @@ A tip-splitting app on a database (several exist) still has an operator who hold
 ## Demo (live, devnet)
 
 **One laptop plays every role.** The connected browser wallet (Phantom/Solflare on devnet) is the **owner**. Ana, Ben, Kasia and a Guest are
-devnet keypairs kept in the browser, which you switch between with "Acting as" in the top bar. The program can't tell them apart from Phantom.
-🏪 *Demo owner* is a backup in case the browser wallet misbehaves on stage.
+devnet keypairs kept in the browser. You pick who signs from **Signing as** at the bottom of the sidebar. The program can't tell them apart from Phantom.
+*Demo owner* is a backup in case the browser wallet misbehaves on stage.
 
-1. **Home → Fund crew from my wallet** (0.02 SOL each + 200 test USDC to the guest)
-2. **Owner → Register venue** (confirm window: 1 minute) → **Open shift** "Friday dinner", 8 h, "Use demo crew"
-3. Shift board → **Open the guest's tip page** (or scan the QR) → act as **Guest** → tip 10 and 20 USDC
-4. Back to the board as the **owner** → *Try to take the tips* → both buttons → open the Explorer links: **failed on-chain**
-5. **End shift now** → act as Ana / Ben / Kasia → submit 8 h / 6 h / 4 h → Ana and Ben **confirm** (2 of 3)
-6. Act as **Guest** (not staff, not owner) → **Pay out now** → Ana 13.33 · Ben 10.00 · Kasia 6.67 · owner +0 → open in Explorer
+1. **Overview → Fund demo wallets** (0.02 SOL to each low wallet, 200 test USDC to the guest)
+2. **Venue → Create venue** (time to agree: 1 minute) → **New shift** "Friday dinner", 8 h, *Use demo crew* → **Open shift**
+3. Shift page → **Tip link → Open tip page** (or scan the QR) → sign as **Guest** → tip 10 and 20 USDC
+4. Back on the shift page as the **owner** → *Your part* → open **Try to take the tips (security test)** → both buttons → open the Explorer links: **failed on-chain**
+5. **End shift** → sign as Ana / Ben / Kasia → enter 8 / 6 / 4 hours → Ana and Ben press **I agree** (2 of 3)
+6. Sign as **Guest** (not staff, not owner) → **Pay out now** → Ana 13.33 · Ben 10.00 · Kasia 6.67 · owner +0 → open in Explorer
 
 Variant: skip step 5's confirmations, wait out the 1-minute window and show the equal-split fallback.
 
@@ -155,13 +159,17 @@ cp target/idl/napiwek.json target/types/napiwek.ts app/src/idl/
 
 ```
 programs/napiwek/src/lib.rs   the whole program: instructions, accounts, split(), errors
-app/src/solana.ts             PDAs, instruction builders, split preview, activity feed
-app/src/actors.tsx            "Acting as": browser wallet + demo keypairs, send/confirm
-app/src/pages/ShiftView.tsx   live shift board: roster, split preview, staff/owner/payout panels
+app/src/solana.ts             PDAs, instruction builders, status + split preview, activity feed
+app/src/actors.tsx            "Signing as": browser wallet + demo keypairs, send/confirm with retries
+app/src/data.ts               polling hooks for venue, shifts and the vault balance
+app/src/App.tsx               app shell: sidebar, signer switcher, one-at-a-time transactions, toasts
+app/src/pages/Overview.tsx    how it works + demo wallets
+app/src/pages/Venue.tsx       create venue, open a shift (validated like the program), shift list
+app/src/pages/ShiftView.tsx   shift page: status, team + split, your part (staff/owner), tip QR, activity
 app/src/pages/TipPage.tsx     guest QR tip page (no crypto jargon)
-app/src/pages/Owner.tsx       venue + open shift
 app/scripts/e2e-devnet.ts     full flow incl. owner attacks, on devnet
 app/scripts/fund.ts           fund any wallets with devnet SOL + test USDC
+app/scripts/check-tx-size.mts proves a 12-person shift's transactions fit Solana's 1232-byte limit
 ```
 
 ## From demo to product
