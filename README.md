@@ -7,8 +7,7 @@ When the shift ends, each staff member enters their own hours; once **more than 
 "Pay out" and the program splits the pot pro-rata, straight into each person's wallet. If the staff can't agree in time, the
 program splits it equally. **The owner has no withdraw permission at all, because the program has no withdraw instruction.**
 
-- **Program (devnet):** (its on-chain name is `napiwek`, Polish for "tip")
-- **Program ID:** [`APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X`](https://explorer.solana.com/address/APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X?cluster=devnet)
+- **Program (devnet):** [`APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X`](https://explorer.solana.com/address/APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X?cluster=devnet) (on-chain name `napiwek`, Polish for "tip")
 - **Stack:** Anchor 1.x (Rust) · SPL Token / Token-2022 via `token_interface` · React + Vite · Wallet Adapter (Wallet Standard) · `@anchor-lang/core`
 - **Target user:** waiters, bartenders and runners in Polish restaurants and bars where tips arrive by card or QR and are pooled per shift, typically a 5–15-person team whose card tips currently land in the owner's merchant account.
 
