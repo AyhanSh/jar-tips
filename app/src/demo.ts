@@ -1,10 +1,10 @@
-// Sample data shown while the guided tour runs, so a first-time visitor (no venue yet)
-// still sees a real-looking venue, shift and team to point at. Nothing here touches the chain.
+// Sample data shown while the guided tour runs, so a first-time visitor (no team yet)
+// still sees a real-looking team and shift to point at. Nothing here touches the chain.
 
 import { createContext } from "react";
 import { BN } from "@anchor-lang/core";
 import { PublicKey } from "@solana/web3.js";
-import { PROGRAM_ID, TIP_MINT, type ShiftAccount, type VenueAccount } from "./solana";
+import { PROGRAM_ID, TIP_MINT, type ShiftAccount, type TeamAccount } from "./solana";
 import type { Activity } from "./solana";
 
 /** True while the guided tour shows sample data. */
@@ -12,35 +12,44 @@ export const DemoMode = createContext(false);
 
 /** A fixed, valid address used as the sample shift's id (not an account on chain). */
 export const DEMO_SHIFT = PublicKey.findProgramAddressSync([Buffer.from("guide-demo-shift")], PROGRAM_ID)[0];
-const DEMO_VENUE = PublicKey.findProgramAddressSync([Buffer.from("guide-demo-venue")], PROGRAM_ID)[0];
+export const DEMO_TEAM = PublicKey.findProgramAddressSync([Buffer.from("guide-demo-team")], PROGRAM_ID)[0];
+const OLA = PublicKey.findProgramAddressSync([Buffer.from("guide-demo-ola")], PROGRAM_ID)[0];
 export const DEMO_VAULT_BALANCE = 35_000_000n; // 35 USDC
 
 const usdc = (n: number) => new BN(Math.round(n * 1e6));
 
 export interface DemoPeople {
-  owner: PublicKey;
+  outsider: PublicKey;
   ana: PublicKey;
   ben: PublicKey;
   kasia: PublicKey;
   guest: PublicKey;
 }
 
-export function demoVenue(p: DemoPeople): VenueAccount {
+/** Ana's team. Ana has proposed adding Ola; it waits for one more vote. */
+export function demoTeam(p: DemoPeople, now: number): TeamAccount {
   return {
-    owner: p.owner,
+    creator: p.ana,
     mint: TIP_MINT,
     name: "Bistro Wisła",
     confirmWindow: new BN(60),
     shiftCount: new BN(1),
     bump: 255,
-  } as VenueAccount;
+    members: [
+      { wallet: p.ana, name: "Ana" },
+      { wallet: p.ben, name: "Ben" },
+      { wallet: p.kasia, name: "Kasia" },
+    ],
+    proposalCount: 1,
+    proposal: { id: 1, add: true, wallet: OLA, name: "Ola", proposer: p.ana, createdAt: new BN(now - 600), votes: 1 },
+  } as TeamAccount;
 }
 
 /** A shift two hours in: three tips, two people have entered hours, nobody has agreed yet. */
 export function demoShift(p: DemoPeople, now: number): ShiftAccount {
   return {
-    venue: DEMO_VENUE,
-    owner: p.owner,
+    team: DEMO_TEAM,
+    openedBy: p.ana,
     mint: TIP_MINT,
     index: new BN(0),
     bump: 255,
@@ -75,10 +84,10 @@ export function demoActivity(p: DemoPeople, now: number): Activity[] {
   return [
     row("Hours entered", 300, p.ben),
     row("Hours entered", 420, p.ana),
-    row("Owner tried to withdraw", 900, p.owner, true),
+    row("Outsider tried to withdraw", 900, p.outsider, true),
     row("Tip received", 1500, p.guest),
     row("Tip received", 3000, p.guest),
     row("Tip received", 5400, p.guest),
-    row("Shift opened", 7200, p.owner),
+    row("Shift opened", 7200, p.ana),
   ];
 }

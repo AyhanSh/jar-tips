@@ -17,7 +17,7 @@ export default function TipPage({ address }: { address: string }) {
   const { connection } = useConnection();
   const { active, actors, setActive, send } = useActors();
   const { run, pending, tick } = useTx();
-  const { shift, venue } = useShift(key, tick);
+  const { shift, team } = useShift(key, tick);
   const [amount, setAmount] = useState(10);
   const [custom, setCustom] = useState("");
   const [bal, setBal] = useState<bigint | null>(null);
@@ -61,7 +61,7 @@ export default function TipPage({ address }: { address: string }) {
 
   if (shift.settled)
     return (
-      <TipCard venue={venue?.name}>
+      <TipCard venue={team?.name}>
         <h1>This shift is closed</h1>
         <p className="muted">Already paid out to the team.</p>
       </TipCard>
@@ -69,7 +69,7 @@ export default function TipPage({ address }: { address: string }) {
 
   if (done)
     return (
-      <TipCard venue={venue?.name}>
+      <TipCard venue={team?.name}>
         <img className="tip-art" src={ART.team} alt="" />
         <h1>Thank you</h1>
         <p>
@@ -87,7 +87,7 @@ export default function TipPage({ address }: { address: string }) {
     );
 
   return (
-    <TipCard venue={venue?.name}>
+    <TipCard venue={team?.name}>
       <img className="tip-art" src={ART.jar} alt="" />
       <h1>Leave a tip for the team</h1>
       <div className="team-faces">

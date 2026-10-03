@@ -5,54 +5,14 @@
  * IDL can be found at `target/idl/napiwek.json`.
  */
 export type Napiwek = {
-  "address": "APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X",
+  "address": "HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD",
   "metadata": {
     "name": "napiwek",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Restaurant tip pool the owner cannot touch"
+    "description": "Restaurant tips with no owner and no middleman"
   },
   "instructions": [
-    {
-      "name": "addStaff",
-      "docs": [
-        "Someone covers part of the shift. The owner can only ever ADD people, and",
-        "only while the shift is running; nobody can be removed. Resets confirmations."
-      ],
-      "discriminator": [
-        193,
-        22,
-        157,
-        102,
-        182,
-        180,
-        167,
-        123
-      ],
-      "accounts": [
-        {
-          "name": "owner",
-          "signer": true,
-          "relations": [
-            "shift"
-          ]
-        },
-        {
-          "name": "shift",
-          "writable": true
-        }
-      ],
-      "args": [
-        {
-          "name": "wallet",
-          "type": "pubkey"
-        },
-        {
-          "name": "name",
-          "type": "string"
-        }
-      ]
-    },
     {
       "name": "confirm",
       "docs": [
@@ -74,7 +34,7 @@ export type Napiwek = {
         {
           "name": "staff",
           "docs": [
-            "Must be on the roster; checked in the instruction."
+            "Must be on the shift's roster; checked in the instruction."
           ],
           "signer": true
         },
@@ -91,24 +51,25 @@ export type Napiwek = {
       ]
     },
     {
-      "name": "createVenue",
+      "name": "createTeam",
       "docs": [
-        "One venue per owner wallet. Fixes the tip currency and how long staff get",
-        "to agree on hours before the equal-split fallback kicks in."
+        "A team member starts the team with their coworkers. Fixes the tip currency",
+        "and how long people get to agree on hours before the equal split kicks in.",
+        "The creator must be on the team and gets no extra rights."
       ],
       "discriminator": [
-        162,
-        203,
-        21,
-        140,
-        131,
-        95,
-        73,
-        87
+        122,
+        161,
+        98,
+        67,
+        178,
+        128,
+        116,
+        113
       ],
       "accounts": [
         {
-          "name": "owner",
+          "name": "creator",
           "writable": true,
           "signer": true
         },
@@ -116,23 +77,22 @@ export type Napiwek = {
           "name": "mint"
         },
         {
-          "name": "venue",
+          "name": "team",
           "writable": true,
           "pda": {
             "seeds": [
               {
                 "kind": "const",
                 "value": [
-                  118,
+                  116,
                   101,
-                  110,
-                  117,
-                  101
+                  97,
+                  109
                 ]
               },
               {
                 "kind": "account",
-                "path": "owner"
+                "path": "creator"
               }
             ]
           }
@@ -153,14 +113,24 @@ export type Napiwek = {
         {
           "name": "confirmWindow",
           "type": "i64"
+        },
+        {
+          "name": "members",
+          "type": {
+            "vec": {
+              "defined": {
+                "name": "memberInput"
+              }
+            }
+          }
         }
       ]
     },
     {
       "name": "endShift",
       "docs": [
-        "Owner closes the shift early (kitchen closed). Only ever moves the end",
-        "time earlier; a shift also closes by itself at its scheduled end."
+        "Someone working the shift closes it early (kitchen closed). Only ever moves",
+        "the end time earlier; a shift also closes by itself at its scheduled end."
       ],
       "discriminator": [
         234,
@@ -174,8 +144,46 @@ export type Napiwek = {
       ],
       "accounts": [
         {
-          "name": "owner",
-          "signer": true,
+          "name": "staff",
+          "docs": [
+            "Must be on the shift's roster; checked in the instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "shift",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "joinShift",
+      "docs": [
+        "A team member who is working but wasn't listed adds themselves (someone",
+        "covers, or the opener forgot them). Nobody can add anyone else, and nobody",
+        "can be removed. Resets confirmations."
+      ],
+      "discriminator": [
+        18,
+        157,
+        98,
+        196,
+        22,
+        174,
+        57,
+        140
+      ],
+      "accounts": [
+        {
+          "name": "member",
+          "docs": [
+            "Must be on the team; checked in the instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "team",
           "relations": [
             "shift"
           ]
@@ -190,8 +198,8 @@ export type Napiwek = {
     {
       "name": "openShift",
       "docs": [
-        "Owner opens a shift: who is working and for how long. After this the",
-        "owner has no say over the money that lands in the vault."
+        "Any team member opens a shift for the coworkers working it. Only team",
+        "members can be on it, so nobody can slip in a fake name."
       ],
       "discriminator": [
         135,
@@ -205,39 +213,21 @@ export type Napiwek = {
       ],
       "accounts": [
         {
-          "name": "owner",
+          "name": "opener",
+          "docs": [
+            "Must be on the team; checked in the instruction. Pays the rent, gets it back at payout."
+          ],
           "writable": true,
-          "signer": true,
-          "relations": [
-            "venue"
-          ]
+          "signer": true
         },
         {
-          "name": "venue",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  118,
-                  101,
-                  110,
-                  117,
-                  101
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "owner"
-              }
-            ]
-          }
+          "name": "team",
+          "writable": true
         },
         {
           "name": "mint",
           "relations": [
-            "venue"
+            "team"
           ]
         },
         {
@@ -257,18 +247,23 @@ export type Napiwek = {
               },
               {
                 "kind": "account",
-                "path": "venue"
+                "path": "team"
               },
               {
                 "kind": "account",
-                "path": "venue.shiftCount",
-                "account": "venue"
+                "path": "team.shiftCount",
+                "account": "team"
               }
             ]
           }
         },
         {
           "name": "vault",
+          "docs": [
+            "`init_if_needed`: the address is predictable, so someone could create it",
+            "first to block the shift. If it exists it must still be the shift's own",
+            "account for this mint, and anything already in it is shared like a tip."
+          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -346,14 +341,56 @@ export type Napiwek = {
           "type": "u16"
         },
         {
-          "name": "staff",
+          "name": "workers",
           "type": {
-            "vec": {
-              "defined": {
-                "name": "staffInput"
-              }
-            }
+            "vec": "pubkey"
           }
+        }
+      ]
+    },
+    {
+      "name": "propose",
+      "docs": [
+        "A team member proposes adding (`add = true`) or removing a coworker. It",
+        "takes effect once more than half the team approves; the proposer's vote",
+        "counts right away. One proposal at a time: only its proposer can replace",
+        "it, or anyone once it is a day old."
+      ],
+      "discriminator": [
+        93,
+        253,
+        82,
+        168,
+        118,
+        33,
+        102,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "member",
+          "docs": [
+            "Must be on the team; checked in the instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "team",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "add",
+          "type": "bool"
+        },
+        {
+          "name": "wallet",
+          "type": "pubkey"
+        },
+        {
+          "name": "name",
+          "type": "string"
         }
       ]
     },
@@ -362,10 +399,10 @@ export type Napiwek = {
       "docs": [
         "THE MOMENT THE INTERMEDIARY DISAPPEARS.",
         "",
-        "Anyone can call this: a waiter, a bot, the owner, a stranger. The caller",
-        "cannot choose where the money goes. The payout accounts must be passed in",
-        "roster order and each must belong to the staff member at that position;",
-        "the vault's only authority is the shift PDA, so this function is the single",
+        "Anyone can call this: a waiter, a bot, a stranger. The caller cannot",
+        "choose where the money goes. The payout accounts must be passed in roster",
+        "order and each must belong to the staff member at that position; the",
+        "vault's only authority is the shift PDA, so this function is the single",
         "exit door for tips.",
         "",
         "* majority of the roster confirmed the current hours -> split pro-rata by minutes",
@@ -403,7 +440,7 @@ export type Napiwek = {
               },
               {
                 "kind": "account",
-                "path": "shift.venue",
+                "path": "shift.team",
                 "account": "shift"
               },
               {
@@ -415,7 +452,7 @@ export type Napiwek = {
           }
         },
         {
-          "name": "owner",
+          "name": "openedBy",
           "writable": true,
           "relations": [
             "shift"
@@ -510,7 +547,7 @@ export type Napiwek = {
         {
           "name": "staff",
           "docs": [
-            "Must be on the roster; checked in the instruction."
+            "Must be on the shift's roster; checked in the instruction."
           ],
           "signer": true
         },
@@ -530,7 +567,7 @@ export type Napiwek = {
       "name": "tip",
       "docs": [
         "A customer tips. Tokens move straight from their wallet into the shift",
-        "vault; the owner's account is not involved at all."
+        "vault; no restaurant account is involved at all."
       ],
       "discriminator": [
         77,
@@ -629,6 +666,42 @@ export type Napiwek = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "vote",
+      "docs": [
+        "A team member approves the open proposal. Passing its id means nobody can",
+        "be tricked into approving a different proposal that replaced it."
+      ],
+      "discriminator": [
+        227,
+        110,
+        155,
+        23,
+        136,
+        126,
+        172,
+        25
+      ],
+      "accounts": [
+        {
+          "name": "member",
+          "docs": [
+            "Must be on the team; checked in the instruction."
+          ],
+          "signer": true
+        },
+        {
+          "name": "team",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "id",
+          "type": "u32"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -646,16 +719,16 @@ export type Napiwek = {
       ]
     },
     {
-      "name": "venue",
+      "name": "team",
       "discriminator": [
-        8,
-        155,
-        85,
-        226,
-        234,
-        173,
-        42,
-        242
+        140,
+        218,
+        177,
+        140,
+        193,
+        241,
+        199,
+        106
       ]
     }
   ],
@@ -687,6 +760,32 @@ export type Napiwek = {
       ]
     },
     {
+      "name": "joined",
+      "discriminator": [
+        16,
+        20,
+        44,
+        48,
+        132,
+        189,
+        68,
+        98
+      ]
+    },
+    {
+      "name": "proposed",
+      "discriminator": [
+        216,
+        37,
+        138,
+        141,
+        130,
+        208,
+        180,
+        153
+      ]
+    },
+    {
       "name": "settled",
       "discriminator": [
         232,
@@ -710,6 +809,32 @@ export type Napiwek = {
         194,
         99,
         76
+      ]
+    },
+    {
+      "name": "teamChanged",
+      "discriminator": [
+        190,
+        254,
+        214,
+        239,
+        202,
+        34,
+        235,
+        98
+      ]
+    },
+    {
+      "name": "teamCreated",
+      "discriminator": [
+        172,
+        52,
+        201,
+        62,
+        192,
+        159,
+        66,
+        49
       ]
     },
     {
@@ -745,70 +870,90 @@ export type Napiwek = {
     {
       "code": 6003,
       "name": "invalidRoster",
-      "msg": "A shift needs between 1 and 12 staff"
+      "msg": "A team or shift needs between 1 and 12 people"
     },
     {
       "code": 6004,
-      "name": "ownerOnRoster",
-      "msg": "The owner cannot be on the tip roster"
+      "name": "creatorNotMember",
+      "msg": "Whoever starts the team must be on it"
     },
     {
       "code": 6005,
       "name": "duplicateStaff",
-      "msg": "This wallet is already on the roster"
+      "msg": "This wallet is already listed"
     },
     {
       "code": 6006,
+      "name": "notMember",
+      "msg": "Signer is not on this team"
+    },
+    {
+      "code": 6007,
       "name": "notOnRoster",
       "msg": "Signer is not on this shift's roster"
     },
     {
-      "code": 6007,
-      "name": "unauthorized",
-      "msg": "Only the owner can do this"
+      "code": 6008,
+      "name": "proposalPending",
+      "msg": "Another proposal is still open"
     },
     {
-      "code": 6008,
+      "code": 6009,
+      "name": "noProposal",
+      "msg": "There is no open proposal"
+    },
+    {
+      "code": 6010,
+      "name": "wrongProposal",
+      "msg": "The proposal changed since you looked; review it again"
+    },
+    {
+      "code": 6011,
+      "name": "proposalExpired",
+      "msg": "The proposal expired"
+    },
+    {
+      "code": 6012,
+      "name": "lastMember",
+      "msg": "A team can't remove its last member"
+    },
+    {
+      "code": 6013,
       "name": "zeroAmount",
       "msg": "Tip amount must be greater than zero"
     },
     {
-      "code": 6009,
+      "code": 6014,
       "name": "overflow",
       "msg": "Arithmetic overflow"
     },
     {
-      "code": 6010,
+      "code": 6015,
       "name": "alreadySettled",
       "msg": "Shift has already been settled"
     },
     {
-      "code": 6011,
-      "name": "shiftClosed",
-      "msg": "Shift is closed"
-    },
-    {
-      "code": 6012,
+      "code": 6016,
       "name": "shiftStillOpen",
       "msg": "Shift is still running"
     },
     {
-      "code": 6013,
+      "code": 6017,
       "name": "tooManyMinutes",
       "msg": "More minutes than the shift lasted"
     },
     {
-      "code": 6014,
+      "code": 6018,
       "name": "staleVersion",
       "msg": "Hours changed since you looked; review them again"
     },
     {
-      "code": 6015,
+      "code": 6019,
       "name": "noMajorityYet",
       "msg": "No majority yet and the confirm window is still open"
     },
     {
-      "code": 6016,
+      "code": 6020,
       "name": "wrongPayoutAccount",
       "msg": "Payout account does not belong to the staff member at that position"
     }
@@ -859,6 +1004,120 @@ export type Napiwek = {
       }
     },
     {
+      "name": "joined",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "shift",
+            "type": "pubkey"
+          },
+          {
+            "name": "staff",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "member",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "memberInput",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "proposal",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "add",
+            "docs": [
+              "true: add `wallet` as `name`. false: remove `wallet`."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "proposer",
+            "type": "pubkey"
+          },
+          {
+            "name": "createdAt",
+            "type": "i64"
+          },
+          {
+            "name": "votes",
+            "docs": [
+              "Bit i set = members[i] approved."
+            ],
+            "type": "u16"
+          }
+        ]
+      }
+    },
+    {
+      "name": "proposed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "team",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "add",
+            "type": "bool"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "settled",
       "type": {
         "kind": "struct",
@@ -894,13 +1153,13 @@ export type Napiwek = {
         "kind": "struct",
         "fields": [
           {
-            "name": "venue",
+            "name": "team",
             "type": "pubkey"
           },
           {
-            "name": "owner",
+            "name": "openedBy",
             "docs": [
-              "Stored only to pin the rent refund and the owner-only actions. Never paid tips."
+              "Paid the rent; gets the vault's rent back at payout. Never paid tips for it."
             ],
             "type": "pubkey"
           },
@@ -990,7 +1249,7 @@ export type Napiwek = {
             "type": "pubkey"
           },
           {
-            "name": "venue",
+            "name": "team",
             "type": "pubkey"
           },
           {
@@ -1037,17 +1296,103 @@ export type Napiwek = {
       }
     },
     {
-      "name": "staffInput",
+      "name": "team",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "wallet",
+            "name": "creator",
+            "docs": [
+              "Paid the rent and seeds the address. No special rights."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
             "type": "pubkey"
           },
           {
             "name": "name",
             "type": "string"
+          },
+          {
+            "name": "confirmWindow",
+            "docs": [
+              "Seconds after a shift closes before the equal-split fallback is allowed."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "shiftCount",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "members",
+            "type": {
+              "vec": {
+                "defined": {
+                  "name": "member"
+                }
+              }
+            }
+          },
+          {
+            "name": "proposalCount",
+            "type": "u32"
+          },
+          {
+            "name": "proposal",
+            "type": {
+              "option": {
+                "defined": {
+                  "name": "proposal"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "teamChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "team",
+            "type": "pubkey"
+          },
+          {
+            "name": "id",
+            "type": "u32"
+          },
+          {
+            "name": "add",
+            "type": "bool"
+          },
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "teamCreated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "team",
+            "type": "pubkey"
+          },
+          {
+            "name": "members",
+            "type": "u8"
           }
         ]
       }
@@ -1068,41 +1413,6 @@ export type Napiwek = {
           {
             "name": "amount",
             "type": "u64"
-          }
-        ]
-      }
-    },
-    {
-      "name": "venue",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "type": "pubkey"
-          },
-          {
-            "name": "mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "name",
-            "type": "string"
-          },
-          {
-            "name": "confirmWindow",
-            "docs": [
-              "Seconds after the shift closes before the equal-split fallback is allowed."
-            ],
-            "type": "i64"
-          },
-          {
-            "name": "shiftCount",
-            "type": "u64"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
           }
         ]
       }

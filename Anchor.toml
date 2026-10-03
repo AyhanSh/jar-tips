@@ -4,11 +4,11 @@
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-napiwek = "APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X"
-
 [programs.devnet]
-napiwek = "APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X"
+napiwek = "HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD"
+
+[programs.localnet]
+napiwek = "HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD"
 
 [provider]
 cluster = "devnet"

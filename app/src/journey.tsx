@@ -5,13 +5,13 @@ import type { ReactNode } from "react";
 import { ART } from "./art";
 import { Icon } from "./ui";
 
-export type Role = "owner" | "staff" | "guest" | "anyone";
+export type Role = "staff" | "guest" | "anyone" | "outsider";
 
 const ROLES: Record<Role, { label: string; icon: string }> = {
-  owner: { label: "Owner", icon: "store" },
   staff: { label: "Staff", icon: "users" },
   guest: { label: "Guest", icon: "user" },
   anyone: { label: "Anyone", icon: "globe" },
+  outsider: { label: "Outsider", icon: "store" },
 };
 
 /** Coloured tag that says which kind of person does a step. Same colours everywhere. */
@@ -26,10 +26,10 @@ export function RoleTag({ role, children }: { role: Role; children?: ReactNode }
 }
 
 export const JOURNEY: { art: keyof typeof ART; title: string; role: Role }[] = [
-  { art: "store", title: "Create venue", role: "owner" },
-  { art: "jar", title: "Open a shift", role: "owner" },
+  { art: "team", title: "Start a team", role: "staff" },
+  { art: "jar", title: "Open a shift", role: "staff" },
   { art: "phone", title: "Guests tip", role: "guest" },
-  { art: "team", title: "Staff agree on hours", role: "staff" },
+  { art: "clock", title: "Agree on hours", role: "staff" },
   { art: "split", title: "Pay out", role: "anyone" },
 ];
 

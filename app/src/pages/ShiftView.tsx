@@ -4,25 +4,22 @@ import { useDemoPeople } from "../data";
 import { useConnection } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import QRCode from "qrcode";
-import { useActors, type Actor, type SendResult } from "../actors";
+import { useActors, useSignerFor, type Actor, type SendResult } from "../actors";
 import { useTx } from "../App";
 import { useShift } from "../data";
 import { formatDuration, useChainNow, useInterval, useProgram } from "../hooks";
 import {
-  MAX_STAFF,
-  MAX_STAFF_NAME_BYTES,
   ata,
-  byteLen,
   canSettle,
   confirmations,
   explorerAddr,
   explorerTx,
   fromUnits,
   hasMajority,
-  ixAddStaff,
   ixConfirm,
   ixEndShift,
-  ixOwnerRawWithdraw,
+  ixJoinShift,
+  ixRawWithdraw,
   ixSettle,
   ixSubmitHours,
   loadActivity,
@@ -40,6 +37,7 @@ import {
   vaultOf,
   type Activity,
   type ShiftAccount,
+  type TeamAccount,
 } from "../solana";
 import { ART } from "../art";
 import { RoleTag } from "../journey";
@@ -58,7 +56,7 @@ export default function ShiftView({ address }: { address: string }) {
   const key = useMemo(() => parseKey(address), [address]);
   const { tick } = useTx();
   const now = useChainNow();
-  const { shift, venue, vault } = useShift(key, tick);
+  const { shift, team, vault } = useShift(key, tick);
   const [qr, setQr] = useState(false);
 
   if (!key) return <Empty text="That isn't a valid shift address." />;
@@ -85,7 +83,7 @@ export default function ShiftView({ address }: { address: string }) {
       <PageHeader
         title={name}
         badge={<Tag tone={st.tone}>{st.label}</Tag>}
-        description={`${venue?.name ?? "Venue"} · opened ${clock(shift.openedAt.toNumber())} · ${hm(shift.scheduledMinutes)} shift`}
+        description={`${team?.name ?? "Team"} · opened ${clock(shift.openedAt.toNumber())} · ${hm(shift.scheduledMinutes)} shift`}
         actions={
           !shift.settled && (
             <button className="btn primary" data-tour="tip-link" onClick={() => setQr(true)}>
@@ -99,7 +97,7 @@ export default function ShiftView({ address }: { address: string }) {
 
       <PayoutBanner shiftKey={key} shift={shift} now={now} />
 
-      {!shift.settled && <ShiftSteps shiftKey={key} shift={shift} phase={phase} pool={pool} now={now} />}
+      {!shift.settled && <ShiftSteps shiftKey={key} shift={shift} team={team} phase={phase} pool={pool} now={now} />}
 
       <MoreTabs shiftKey={key} shift={shift} phase={phase} pool={pool} shares={shares} onShowQr={() => setQr(true)} />
 
@@ -186,7 +184,7 @@ function PayoutBanner({ shift }: { shiftKey: PublicKey; shift: ShiftAccount; now
       <img src={ART.split} alt="" />
       <div>
         <div className="alert-title">Paid out</div>
-        <p className="alert-text">Straight to each wallet. The owner never held it.</p>
+        <p className="alert-text">Straight to each wallet. No owner or middleman ever held it.</p>
       </div>
     </div>
   );
@@ -243,15 +241,6 @@ function Team({ shift, shares, phase }: { shift: ShiftAccount; shares: bigint[];
   );
 }
 
-/** A signer this browser can use for `wallet`: a demo keypair or the connected wallet. */
-function useSignerFor() {
-  const { actorFor } = useActors();
-  return (wallet: PublicKey) => {
-    const a = actorFor(wallet);
-    return a && a.publicKey && (a.keypair || a.id === "wallet") ? a : undefined;
-  };
-}
-
 type StepState = "done" | "current" | "todo";
 
 function Step({
@@ -305,23 +294,40 @@ function Step({
 }
 
 /** The whole shift as four steps. Every button says who it acts as, so nobody has to switch identities. */
-function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint; now: number }) {
+function ShiftSteps({
+  shiftKey,
+  shift,
+  team,
+  phase,
+  pool,
+  now,
+}: {
+  shiftKey: PublicKey;
+  shift: ShiftAccount;
+  team: TeamAccount | null;
+  phase: string;
+  pool: bigint;
+  now: number;
+}) {
   const program = useProgram();
   const { send, actors, setActive } = useActors();
   const { run, pending } = useTx();
   const signerFor = useSignerFor();
   const payout = usePayout(shiftKey, shift);
   const [hours, setHours] = useState<Record<string, string>>({});
-  const owner = signerFor(shift.owner);
+  // Anyone working the shift can end it; use the first of them this browser can sign for.
+  const worker = shift.staff.map((s) => signerFor(s.wallet)).find((a) => a);
   const guest = actors.find((a) => a.id === "guest")!;
+  // Team members left off the roster can add themselves.
+  const missing = (team?.members ?? []).filter((m) => !shift.staff.some((s) => s.wallet.equals(m.wallet)));
   const open = phase === "open";
   const ready = canSettle(shift, now);
   const current = stageOf(shift, now); // 1-4 here: a paid-out shift doesn't render the steps
   const state = (n: number): StepState => (n < current ? "done" : n === current ? "current" : "todo");
   const agreed = confirmations(shift);
   const preview = previewShares(shift, pool, !hasMajority(shift) && phase === "fallback");
-  // Pay out is open to anyone: use the owner if this browser has them, else the guest.
-  const payer = owner ?? guest;
+  // Pay out is open to anyone: use someone from the shift if this browser has them, else the guest.
+  const payer = worker ?? guest;
   // Only the current step is open; click another to peek or act early.
   const [picked, setPicked] = useState<number | null>(null);
   const shown = picked ?? current;
@@ -340,7 +346,7 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         onToggle={toggle(1)}
         title="Collect tips"
         summary={`${fromUnits(pool)} USDC · ${shift.tipCount} tips`}
-        who={<RoleTag role="guest">Guests tip · Owner ends shift</RoleTag>}
+        who={<RoleTag role="guest">Guests tip · anyone working can end it</RoleTag>}
       >
         <div className="stage-actions">
           <button
@@ -356,11 +362,11 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
           {open && (
             <button
               className="btn"
-              disabled={!owner || !!pending}
-              title={owner ? "" : "Only the owner can end the shift"}
-              onClick={() => run("Owner ends the shift", async () => send(txOf(await ixEndShift(program, owner!.publicKey!, shiftKey)), { as: owner }))}
+              disabled={!worker || !!pending}
+              title={worker ? "Ends it now instead of at the scheduled time" : "Only someone working this shift can end it"}
+              onClick={() => run(`${worker!.name} ends the shift`, async () => send(txOf(await ixEndShift(program, worker!.publicKey!, shiftKey)), { as: worker }))}
             >
-              <Avatar name={owner?.name ?? "Owner"} size={16} /> End shift (owner)
+              <Avatar name={worker?.name ?? "Staff"} size={16} /> End shift as {worker?.name ?? "staff"}
             </button>
           )}
         </div>
@@ -380,7 +386,7 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
         {shift.staff.map((s) => {
           const me = signerFor(s.wallet);
           const id = s.wallet.toBase58();
-          const value = hours[id] ?? String((s.submitted ? s.minutes : shift.scheduledMinutes) / 60);
+          const value = hours[id] ?? String(+((s.submitted ? s.minutes : shift.scheduledMinutes) / 60).toFixed(2));
           const minutes = Math.round(Number(value) * 60);
           const bad = value === "" || !(Number(value) >= 0) || minutes > shift.scheduledMinutes;
           const same = s.submitted && minutes === s.minutes;
@@ -406,6 +412,30 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
                 </span>
               ) : (
                 <span className="muted small">Waiting for {s.name} to sign</span>
+              )}
+            </div>
+          );
+        })}
+        {missing.map((m) => {
+          const me = signerFor(m.wallet);
+          return (
+            <div className="person-row joinable" key={m.wallet.toBase58()}>
+              <span className="cell-person">
+                <Avatar name={m.name} /> {m.name}
+              </span>
+              <span className="person-state">
+                <span className="muted small">on the team, not on this shift</span>
+              </span>
+              {me ? (
+                <button
+                  className="btn"
+                  disabled={!!pending}
+                  onClick={() => run(`${m.name} joins the shift`, async () => send(txOf(await ixJoinShift(program, m.wallet, shift.team, shiftKey)), { as: me }))}
+                >
+                  <Icon name="plus" size={13} /> {m.name} worked too
+                </button>
+              ) : (
+                <span className="muted small">Only {m.name} can add themselves</span>
               )}
             </div>
           );
@@ -479,99 +509,62 @@ function ShiftSteps({ shiftKey, shift, phase, pool, now }: { shiftKey: PublicKey
   );
 }
 
-/** The owner identity this browser can sign as for `shift` (the demo owner during the guide). */
-function useOwnerActor(shift: ShiftAccount) {
-  const { actors } = useActors();
-  const signerFor = useSignerFor();
-  const demo = useContext(DemoMode);
-  return signerFor(shift.owner) ?? (demo ? actors.find((a) => a.id === "owner") : undefined);
-}
-
-/** Owner-only controls, clearly separated from the shift steps. */
-function OwnerTools({ shiftKey, shift, phase, pool, ownerActor }: { shiftKey: PublicKey; shift: ShiftAccount; phase: string; pool: bigint; ownerActor: Actor }) {
+/** Attempts by someone outside the team (the restaurant, say). Every one is a real transaction that fails. */
+function CheatTools({ shiftKey, shift, pool }: { shiftKey: PublicKey; shift: ShiftAccount; pool: bigint }) {
   const program = useProgram();
-  const { send } = useActors();
+  const { send, actors } = useActors();
   const { run, pending } = useTx();
-  const [name, setName] = useState("");
-  const [wallet, setWallet] = useState("");
-  const owner = shift.owner;
-  const key = parseKey(wallet);
-  const addErr = !name.trim()
-    ? null
-    : byteLen(name.trim()) > MAX_STAFF_NAME_BYTES
-      ? "Name is too long"
-      : !key
-        ? wallet
-          ? "Not a valid address"
-          : null
-        : key.equals(owner)
-          ? "The owner can't be on the roster"
-          : shift.staff.some((s) => s.wallet.equals(key))
-            ? "Already on the team"
-            : null;
+  const outsider = actors.find((a) => a.id === "outsider")!;
+  const who = outsider.publicKey!;
 
   // Ask for exactly what's in the vault: the Token program checks the balance before the authority.
   const rawWithdraw = () =>
-    run("Owner tries to withdraw", async () => send(txOf(...ixOwnerRawWithdraw(owner, shiftKey, pool)), { as: ownerActor, expectFail: true }), { expectFail: true });
-  // The real payout instruction, with the first person's account swapped for the owner's.
+    run("Restaurant tries to withdraw", async () => send(txOf(...ixRawWithdraw(who, shiftKey, pool)), { as: outsider, expectFail: true }), { expectFail: true });
+  // The real payout instruction, with the first person's account swapped for the outsider's.
   const redirect = () =>
     run(
-      "Owner tries to redirect a share",
+      "Restaurant tries to redirect a share",
       async () =>
-        send(txOf(await ixSettle(program, owner, shiftKey, shift, shift.staff.map((s, i) => (i === 0 ? ata(owner) : ata(s.wallet))))), {
-          as: ownerActor,
+        send(txOf(await ixSettle(program, who, shiftKey, shift, shift.staff.map((s, i) => (i === 0 ? ata(who) : ata(s.wallet))))), {
+          as: outsider,
           expectFail: true,
         }),
       { expectFail: true },
     );
+  const join = () =>
+    run("Restaurant tries to join the shift", async () => send(txOf(await ixJoinShift(program, who, shift.team, shiftKey)), { as: outsider, expectFail: true }), {
+      expectFail: true,
+    });
 
   return (
     <>
       <div className="tab-intro">
-        <RoleTag role="owner">Acts as {ownerActor.name}</RoleTag>
-        <span className="muted small">Can add people. Can never take money.</span>
+        <RoleTag role="outsider">Acts as the restaurant</RoleTag>
+        <span className="muted small">Not on the team, no rights in the program. Each try is a real devnet transaction.</span>
       </div>
-      {phase === "open" && (
-        <div className="action-row">
-          <div className="action-meta">
-            <div className="action-title">Add someone covering</div>
-            <p>Add-only. Nobody can be removed.</p>
-            {addErr && <em className="field-err">{addErr}</em>}
-          </div>
-          <div className="action-control wide">
-            <input className="name-in" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="mono" placeholder="Wallet address" value={wallet} onChange={(e) => setWallet(e.target.value)} />
-            <button
-              className="btn"
-              disabled={!name.trim() || !key || !!addErr || shift.staff.length >= MAX_STAFF || !!pending}
-              onClick={() =>
-                run("Owner adds a person", async () => {
-                  const r = await send(txOf(await ixAddStaff(program, owner, shiftKey, key!, name.trim())), { as: ownerActor });
-                  if (!r.failed) {
-                    setName("");
-                    setWallet("");
-                  }
-                  return r;
-                })
-              }
-            >
-              Add
-            </button>
-          </div>
-        </div>
-      )}
-      <div className="action-row danger-zone">
-        <img className="row-art" src={ART.shield} alt="" />
-        <div className="action-meta">
-          <div className="action-title">Try to steal the tips</div>
-          <p>Real transactions as the owner. Solana rejects both.</p>
-        </div>
-        <div className="action-control stack">
+      <div className="cheat-grid">
+        <div className="cheat">
+          <img src={ART.shield} alt="" />
+          <b>Take the tips</b>
+          <span>Move the vault's tokens straight out with the Token program.</span>
           <button className="btn danger" disabled={!!pending} onClick={rawWithdraw}>
             Withdraw {fromUnits(pool)} USDC
           </button>
+        </div>
+        <div className="cheat">
+          <img src={ART.split} alt="" />
+          <b>Redirect a share</b>
+          <span>Call the real payout, but with {shift.staff[0]?.name}'s account swapped for its own.</span>
           <button className="btn danger" disabled={!!pending} onClick={redirect}>
             Send {shift.staff[0]?.name}'s share to me
+          </button>
+        </div>
+        <div className="cheat">
+          <img src={ART.team} alt="" />
+          <b>Get on the roster</b>
+          <span>Add itself to the shift to take a cut of the tips.</span>
+          <button className="btn danger" disabled={!!pending} onClick={join}>
+            Join this shift
           </button>
         </div>
       </div>
@@ -665,11 +658,10 @@ function MoreTabs({
   shares: bigint[];
   onShowQr: () => void;
 }) {
-  const ownerActor = useOwnerActor(shift);
   const tabs = [
     { id: "team", label: "Team", icon: "users" },
     ...(!shift.settled ? [{ id: "qr", label: "Tip QR", icon: "qr" }] : []),
-    ...(!shift.settled && ownerActor ? [{ id: "owner", label: "Owner tools", icon: "shield", tour: "security" }] : []),
+    ...(!shift.settled ? [{ id: "cheat", label: "Try to cheat", icon: "shield", tour: "security" }] : []),
     { id: "activity", label: "Activity", icon: "activity" },
   ];
   const [tab, setTab] = useState("team");
@@ -681,7 +673,7 @@ function MoreTabs({
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
-            className={`tab ${tab === t.id ? "on" : ""} ${t.id === "owner" ? "tab-owner" : ""}`}
+            className={`tab ${tab === t.id ? "on" : ""} ${t.id === "cheat" ? "tab-owner" : ""}`}
             data-tour={(t as { tour?: string }).tour}
             onClick={() => setTab(t.id)}
           >
@@ -692,7 +684,7 @@ function MoreTabs({
       <div className="tab-body">
         {tab === "team" && <Team shift={shift} shares={shares} phase={phase} />}
         {tab === "qr" && <TipLink shiftKey={shiftKey} onShowQr={onShowQr} />}
-        {tab === "owner" && ownerActor && <OwnerTools shiftKey={shiftKey} shift={shift} phase={phase} pool={pool} ownerActor={ownerActor} />}
+        {tab === "cheat" && <CheatTools shiftKey={shiftKey} shift={shift} pool={pool} />}
         {tab === "activity" && (
           <>
             <div className="onchain">
@@ -709,9 +701,9 @@ function MoreTabs({
                 </ExtLink>
               </span>
               <span>
-                Owner{" "}
-                <ExtLink href={explorerAddr(shift.owner)}>
-                  <span className="mono">{short(shift.owner)}</span>
+                Team{" "}
+                <ExtLink href={explorerAddr(shift.team)}>
+                  <span className="mono">{short(shift.team)}</span>
                 </ExtLink>
               </span>
             </div>

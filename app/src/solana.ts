@@ -43,8 +43,10 @@ export const SYMBOL = "USDC";
 
 export type NapiwekProgram = Program<Napiwek>;
 export type ShiftAccount = Awaited<ReturnType<NapiwekProgram["account"]["shift"]["fetch"]>>;
-export type VenueAccount = Awaited<ReturnType<NapiwekProgram["account"]["venue"]["fetch"]>>;
+export type TeamAccount = Awaited<ReturnType<NapiwekProgram["account"]["team"]["fetch"]>>;
 export type StaffEntry = ShiftAccount["staff"][number];
+export type Member = TeamAccount["members"][number];
+export type Proposal = NonNullable<TeamAccount["proposal"]>;
 
 // The program is only used to build instructions and read accounts; signing is
 // done by whichever "actor" is active (browser wallet or a demo keypair).
@@ -52,12 +54,13 @@ export function getProgram(connection: Connection): NapiwekProgram {
   return new Program<Napiwek>(idl as Napiwek, { connection } as AnchorProvider);
 }
 
-export const venuePda = (owner: PublicKey) =>
-  PublicKey.findProgramAddressSync([Buffer.from("venue"), owner.toBuffer()], PROGRAM_ID)[0];
+/** One team per creator wallet. The creator gets no special rights; it only seeds the address. */
+export const teamPda = (creator: PublicKey) =>
+  PublicKey.findProgramAddressSync([Buffer.from("team"), creator.toBuffer()], PROGRAM_ID)[0];
 
-export const shiftPda = (venue: PublicKey, index: number | BN) =>
+export const shiftPda = (team: PublicKey, index: number | BN) =>
   PublicKey.findProgramAddressSync(
-    [Buffer.from("shift"), venue.toBuffer(), new BN(index).toArrayLike(Buffer, "le", 8)],
+    [Buffer.from("shift"), team.toBuffer(), new BN(index).toArrayLike(Buffer, "le", 8)],
     PROGRAM_ID,
   )[0];
 
@@ -115,6 +118,15 @@ export async function balancesOf(connection: Connection, owners: PublicKey[]): P
 }
 
 // ---------------------------------------------------------------------------
+// team votes, mirrored from `passes` in lib.rs
+// ---------------------------------------------------------------------------
+
+/** Who has approved the open proposal (bit i = members[i]). */
+export const votedBy = (team: TeamAccount, p: Proposal) => team.members.filter((_, i) => (p.votes >> i) & 1);
+export const majorityOf = (n: number) => Math.floor(n / 2) + 1;
+export const PROPOSAL_TTL = 24 * 3600;
+
+// ---------------------------------------------------------------------------
 // shift maths, mirrored from the program so the UI can preview the split
 // ---------------------------------------------------------------------------
 
@@ -148,7 +160,8 @@ export function stageOf(shift: ShiftAccount, now: number): 1 | 2 | 3 | 4 | 5 {
   if (shift.settled) return 5;
   if (phaseOf(shift, now) === "open") return 1;
   if (canSettle(shift, now)) return 4;
-  return shift.staff.some((s) => !s.submitted) ? 2 : 3;
+  // Agreement can start once enough people entered hours to reach a majority; a late entry resets it.
+  return shift.staff.filter((s) => s.submitted).length >= needed(shift) ? 3 : 2;
 }
 
 /** One human status for a shift, used in lists and on the shift page. */
@@ -187,38 +200,53 @@ export function previewShares(shift: ShiftAccount, pool: bigint, byTimeout: bool
 // instruction builders
 // ---------------------------------------------------------------------------
 
-export async function ixCreateVenue(p: NapiwekProgram, owner: PublicKey, name: string, window: number) {
+export async function ixCreateTeam(
+  p: NapiwekProgram,
+  creator: PublicKey,
+  name: string,
+  window: number,
+  members: { wallet: PublicKey; name: string }[],
+) {
   return p.methods
-    .createVenue(name, new BN(window))
-    .accountsPartial({ owner, mint: TIP_MINT, venue: venuePda(owner), tokenProgram: TOKEN_PROGRAM })
+    .createTeam(name, new BN(window), members)
+    .accountsPartial({ creator, mint: TIP_MINT, team: teamPda(creator), tokenProgram: TOKEN_PROGRAM })
     .instruction();
+}
+
+/** add = true: add `wallet` as `name`; false: remove `wallet`. */
+export async function ixPropose(p: NapiwekProgram, member: PublicKey, team: PublicKey, add: boolean, wallet: PublicKey, name = "") {
+  return p.methods.propose(add, wallet, name).accountsPartial({ member, team }).instruction();
+}
+
+export async function ixVote(p: NapiwekProgram, member: PublicKey, team: PublicKey, id: number) {
+  return p.methods.vote(id).accountsPartial({ member, team }).instruction();
 }
 
 export async function ixOpenShift(
   p: NapiwekProgram,
-  owner: PublicKey,
+  opener: PublicKey,
+  team: PublicKey,
   index: number,
   label: string,
   minutes: number,
-  staff: { wallet: PublicKey; name: string }[],
+  workers: PublicKey[],
 ) {
-  const venue = venuePda(owner);
-  const shift = shiftPda(venue, index);
+  const shift = shiftPda(team, index);
   // Staff token accounts are not created here: with a full roster that would not fit in one
   // transaction. Whoever pays out creates any missing ones first (see missingAtaIxs).
   const ix = await p.methods
-    .openShift(label, minutes, staff)
-    .accountsPartial({ owner, venue, mint: TIP_MINT, shift, vault: vaultOf(shift), tokenProgram: TOKEN_PROGRAM })
+    .openShift(label, minutes, workers)
+    .accountsPartial({ opener, team, mint: TIP_MINT, shift, vault: vaultOf(shift), tokenProgram: TOKEN_PROGRAM })
     .instruction();
   return { ix, shift };
 }
 
-export async function ixAddStaff(p: NapiwekProgram, owner: PublicKey, shift: PublicKey, wallet: PublicKey, name: string) {
-  return p.methods.addStaff(wallet, name).accountsPartial({ owner, shift }).instruction();
+export async function ixJoinShift(p: NapiwekProgram, member: PublicKey, team: PublicKey, shift: PublicKey) {
+  return p.methods.joinShift().accountsPartial({ member, team, shift }).instruction();
 }
 
-export async function ixEndShift(p: NapiwekProgram, owner: PublicKey, shift: PublicKey) {
-  return p.methods.endShift().accountsPartial({ owner, shift }).instruction();
+export async function ixEndShift(p: NapiwekProgram, staff: PublicKey, shift: PublicKey) {
+  return p.methods.endShift().accountsPartial({ staff, shift }).instruction();
 }
 
 export async function ixTip(p: NapiwekProgram, tipper: PublicKey, shift: PublicKey, amount: BN) {
@@ -236,7 +264,7 @@ export async function ixConfirm(p: NapiwekProgram, staff: PublicKey, shift: Publ
   return p.methods.confirm(version).accountsPartial({ staff, shift }).instruction();
 }
 
-/** `payTo` defaults to the roster's own token accounts; overriding it is how the owner "attack" is staged. */
+/** `payTo` defaults to the roster's own token accounts; overriding it is how the "redirect" attack is staged. */
 export async function ixSettle(
   p: NapiwekProgram,
   caller: PublicKey,
@@ -247,7 +275,7 @@ export async function ixSettle(
   const targets = payTo ?? shift.staff.map((s) => ata(s.wallet));
   return p.methods
     .settle()
-    .accountsPartial({ caller, shift: shiftKey, owner: shift.owner, mint: TIP_MINT, vault: vaultOf(shiftKey), tokenProgram: TOKEN_PROGRAM })
+    .accountsPartial({ caller, shift: shiftKey, openedBy: shift.openedBy, mint: TIP_MINT, vault: vaultOf(shiftKey), tokenProgram: TOKEN_PROGRAM })
     .remainingAccounts(targets.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })))
     .instruction();
 }
@@ -267,11 +295,11 @@ export async function missingAtaIxs(connection: Connection, payer: PublicKey, wa
   return chunks;
 }
 
-/** The owner tries to move tips out of the vault directly with the Token program. */
-export function ixOwnerRawWithdraw(owner: PublicKey, shift: PublicKey, amount: bigint) {
+/** Someone (the restaurant, say) tries to move tips out of the vault directly with the Token program. */
+export function ixRawWithdraw(who: PublicKey, shift: PublicKey, amount: bigint) {
   return [
-    createAssociatedTokenAccountIdempotentInstruction(owner, ata(owner), owner, TIP_MINT),
-    createTransferCheckedInstruction(vaultOf(shift), TIP_MINT, ata(owner), owner, amount, DECIMALS),
+    createAssociatedTokenAccountIdempotentInstruction(who, ata(who), who, TIP_MINT),
+    createTransferCheckedInstruction(vaultOf(shift), TIP_MINT, ata(who), who, amount, DECIMALS),
   ];
 }
 
@@ -313,14 +341,17 @@ export interface Activity {
 }
 
 const IX_LABELS: Record<string, string> = {
+  CreateTeam: "Team started",
+  Propose: "Change proposed",
+  Vote: "Vote",
   OpenShift: "Shift opened",
-  AddStaff: "Person added",
+  JoinShift: "Joined the shift",
   EndShift: "Shift ended",
   Tip: "Tip received",
   SubmitHours: "Hours entered",
   Confirm: "Agreed to hours",
   Settle: "Paid out",
-  TransferChecked: "Owner tried to withdraw",
+  TransferChecked: "Outsider tried to withdraw",
 };
 
 // Transactions are immutable, so each one is fetched once and cached.
@@ -337,8 +368,9 @@ export async function loadActivity(connection: Connection, address: PublicKey): 
     const ix = logs.map((l) => /Program log: Instruction: (\w+)/.exec(l)?.[1]).find((n) => n && IX_LABELS[n]);
     const all = logs.join("\n");
     let action = ix ? IX_LABELS[ix] : "Transaction";
-    if (/owner does not match/.test(all)) action = "Owner tried to withdraw";
+    if (/owner does not match/.test(all)) action = "Outsider tried to withdraw";
     else if (/WrongPayoutAccount/.test(all)) action = "Someone tried to redirect a share";
+    else if (/NotMember/.test(all)) action = "Outsider tried to join";
     else if (tx.meta?.err && ix === "Settle") action = "Payout attempt";
     txCache.set(s.signature, {
       action,

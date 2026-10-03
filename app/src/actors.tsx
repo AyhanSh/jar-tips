@@ -1,7 +1,9 @@
-// Who is signing right now. The connected browser wallet is the owner in the
-// demo; Ana, Ben, Kasia and a guest are throwaway devnet keypairs kept in this
-// browser so one laptop can play every role without switching wallets.
-// They are ordinary signers: the program can't tell them apart from Phantom.
+// Who is signing right now. Ana, Ben, Kasia, a guest and "the restaurant" are
+// throwaway devnet keypairs kept in this browser so one laptop can play every
+// role without switching wallets; the connected browser wallet can join the
+// team as one more coworker. They are ordinary signers: the program can't tell
+// them apart from Phantom. The restaurant is an outsider with no rights at all,
+// there only so the demo can show its attempts failing.
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
@@ -13,7 +15,7 @@ import sponsorSecret from "./sponsor-keypair.json";
 /** Devnet-only "gas station": tops up the demo wallets when the visitor has no SOL. Public on purpose. */
 const SPONSOR = Keypair.fromSecretKey(Uint8Array.from(sponsorSecret as number[]));
 
-export type ActorId = "wallet" | "owner" | "ana" | "ben" | "kasia" | "guest";
+export type ActorId = "wallet" | "ana" | "ben" | "kasia" | "guest" | "outsider";
 
 export interface Actor {
   id: ActorId;
@@ -30,12 +32,15 @@ export interface SendResult {
 }
 
 const DEMO: { id: Exclude<ActorId, "wallet">; name: string; role: string }[] = [
-  { id: "owner", name: "Demo owner", role: "Owner · no wallet needed" },
   { id: "ana", name: "Ana", role: "Staff · waiter" },
   { id: "ben", name: "Ben", role: "Staff · bartender" },
   { id: "kasia", name: "Kasia", role: "Staff · runner" },
   { id: "guest", name: "Guest", role: "Customer" },
+  { id: "outsider", name: "Restaurant", role: "Outsider · no rights" },
 ];
+
+/** Identities that can play "you" on the team pages. */
+export type MeId = "wallet" | "ana";
 
 const STORE = "napiwek.demo-keys.v1";
 
@@ -111,13 +116,15 @@ function loadDemoKeys(): Record<string, Keypair> {
 
 interface Ctx {
   actors: Actor[];
-  /** The identities to offer in pickers: the demo owner only when no wallet is connected. */
+  /** The identities to offer in pickers (everyone but the outsider). */
   visible: Actor[];
   active: Actor;
   setActive: (id: ActorId) => void;
   actorFor: (pk: PublicKey) => Actor | undefined;
-  /** The identity that plays the venue owner: the browser wallet, or the demo owner when last chosen. */
-  owner: Actor;
+  /** Who "you" are on the team pages: the browser wallet, or Ana when last chosen. */
+  me: Actor;
+  /** True once a "you" identity was picked (or a wallet is connected). */
+  meChosen: boolean;
   /** Sign and send as the active actor (or `as`). `expectFail` skips preflight so a rejected tx lands on-chain. */
   send: (tx: Transaction, opts?: { as?: Actor; signers?: Keypair[]; expectFail?: boolean }) => Promise<SendResult>;
   fundCrew: () => Promise<string>;
@@ -126,15 +133,28 @@ interface Ctx {
 const ActorCtx = createContext<Ctx | null>(null);
 export const useActors = () => useContext(ActorCtx)!;
 
+/** A signer this browser can use for `wallet`: a demo keypair or the connected wallet. */
+export function useSignerFor() {
+  const { actorFor } = useActors();
+  return useCallback(
+    (wallet: PublicKey) => {
+      const a = actorFor(wallet);
+      return a && a.publicKey && (a.keypair || a.id === "wallet") ? a : undefined;
+    },
+    [actorFor],
+  );
+}
+
 export function ActorProvider({ children }: { children: ReactNode }) {
   const { connection } = useConnection();
   const wallet = useWallet();
   const keys = useMemo(loadDemoKeys, []);
-  const [ownerId, setOwnerId] = useState<"wallet" | "owner">(() => {
+  const [meId, setMeId] = useState<MeId | null>(() => {
     try {
-      return localStorage.getItem(STORE + ".owner") === "owner" ? "owner" : "wallet";
+      const v = localStorage.getItem(STORE + ".me");
+      return v === "ana" || v === "wallet" ? v : null;
     } catch {
-      return "wallet";
+      return null;
     }
   });
   const [activeId, setActiveId] = useState<ActorId>(() => {
@@ -146,9 +166,9 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   });
   const setActive = useCallback((id: ActorId) => {
     setActiveId(id);
-    if (id === "wallet" || id === "owner") setOwnerId(id);
+    if (id === "wallet" || id === "ana") setMeId(id);
     try {
-      if (id === "wallet" || id === "owner") localStorage.setItem(STORE + ".owner", id);
+      if (id === "wallet" || id === "ana") localStorage.setItem(STORE + ".me", id);
     } catch {
       /* not persisted */
     }
@@ -161,14 +181,15 @@ export function ActorProvider({ children }: { children: ReactNode }) {
 
   const actors: Actor[] = useMemo(
     () => [
-      { id: "wallet", name: "You", role: "Owner · your wallet", publicKey: wallet.publicKey },
+      { id: "wallet", name: "You", role: "Staff · your wallet", publicKey: wallet.publicKey },
       ...DEMO.map((d) => ({ ...d, publicKey: keys[d.id].publicKey, keypair: keys[d.id] })),
     ],
     [wallet.publicKey, keys],
   );
   const active = actors.find((a) => a.id === activeId) ?? actors[0];
-  const visible = actors.filter((a) => a.id !== "owner" || !wallet.publicKey || activeId === "owner");
-  const owner = actors.find((a) => a.id === ownerId) ?? actors[0];
+  const visible = actors.filter((a) => a.id !== "outsider");
+  const meChosen = meId === "ana" || !!wallet.publicKey;
+  const me = actors.find((a) => a.id === (meId === "ana" ? "ana" : wallet.publicKey ? "wallet" : "ana"))!;
   const actorFor = useCallback(
     (pk: PublicKey) => actors.find((a) => a.publicKey?.equals(pk)),
     [actors],
@@ -215,7 +236,9 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   // Paid by the connected wallet when it can afford it, otherwise by the bundled devnet sponsor,
   // so a judge with no wallet (or an empty one) can still run the whole demo.
   const fundCrew = useCallback(async () => {
-    const want: Record<string, number> = { owner: 0.03, ana: 0.01, ben: 0.01, kasia: 0.01, guest: 0.01 };
+    // Ana starts the team and opens shifts (she pays their rent and gets the vault's back);
+    // everyone else only pays fees.
+    const want: Record<string, number> = { ana: 0.03, ben: 0.01, kasia: 0.01, guest: 0.01, outsider: 0.004 };
     const demoKeys = DEMO.map((d) => keys[d.id].publicKey);
     const infos = await connection.getMultipleAccountsInfo(demoKeys);
     const transfers = DEMO.map((d, i) => ({ to: demoKeys[i], lamports: Math.round(want[d.id] * LAMPORTS_PER_SOL), have: infos[i]?.lamports ?? 0 }))
@@ -247,6 +270,6 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   }, [wallet.publicKey, connection, keys, send, actors]);
 
   return (
-    <ActorCtx.Provider value={{ actors, visible, active, setActive, actorFor, owner, send, fundCrew }}>{children}</ActorCtx.Provider>
+    <ActorCtx.Provider value={{ actors, visible, active, setActive, actorFor, me, meChosen, send, fundCrew }}>{children}</ActorCtx.Provider>
   );
 }

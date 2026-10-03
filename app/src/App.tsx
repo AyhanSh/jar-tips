@@ -2,13 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useChainNow, useHashRoute } from "./hooks";
 import { useActors, type ActorId, type SendResult } from "./actors";
-import { useShiftOwner, useVenue } from "./data";
+import { TeamProvider, useMyTeam, useShiftTeam, useTeamData, type TeamData } from "./data";
 import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, parseKey, short, statusOf } from "./solana";
 import { Avatar, Icon, Spinner } from "./ui";
 import { Tour, useTour } from "./Tour";
 import { DEMO_SHIFT, DemoMode } from "./demo";
 import Overview from "./pages/Overview";
-import Venue from "./pages/Venue";
+import Team from "./pages/Team";
 import ShiftView from "./pages/ShiftView";
 import TipPage from "./pages/TipPage";
 
@@ -52,11 +52,11 @@ export default function App() {
   const tour = useTour();
   const demo = useRef(false);
   demo.current = tour.open;
-  // Leaving the guide: drop the sample data and start from the real (possibly empty) venue.
+  // Leaving the guide: drop the sample data and start from the real (possibly empty) team.
   const endTour = useCallback(() => {
     tour.close();
-    if (window.location.hash.includes(DEMO_SHIFT.toBase58()) || /^#\/shift\//.test(window.location.hash) || /^#\/venue/.test(window.location.hash))
-      window.location.hash = "/venue";
+    if (window.location.hash.includes(DEMO_SHIFT.toBase58()) || /^#\/(shift|team|venue)/.test(window.location.hash))
+      window.location.hash = "/team";
   }, [tour]);
 
   const push = useCallback((t: Omit<Toast, "id">) => {
@@ -99,8 +99,8 @@ export default function App() {
   useEffect(() => setMenuOpen(false), [route.join("/")]);
 
   const page =
-    route[0] === "venue" || route[0] === "owner" ? (
-      <Venue creating={route[1] === "new"} />
+    isTeamRoute(route) ? (
+      <Team creating={route[1] === "new"} />
     ) : route[0] === "shift" && route[1] ? (
       <ShiftView address={route[1]} />
     ) : route[0] === "tip" && route[1] ? (
@@ -113,6 +113,7 @@ export default function App() {
     <Tx.Provider value={{ run, pending, tick }}>
      <HelpCtx.Provider value={tour.start}>
      <DemoMode.Provider value={tour.open && route[0] !== "tip"}>
+     <TeamProvider tick={tick}>
       {tour.open && route[0] !== "tip" && (
         <>
           <Tour onClose={endTour} />
@@ -154,28 +155,34 @@ export default function App() {
           </div>
         ))}
       </div>
+     </TeamProvider>
      </DemoMode.Provider>
      </HelpCtx.Provider>
     </Tx.Provider>
   );
 }
 
-type Browsed = ReturnType<typeof useVenue>;
+/** Old links (#/venue) still land on the team page. */
+const isTeamRoute = (route: string[]) => route[0] === "team" || route[0] === "venue" || route[0] === "owner";
 
-/** The venue the chrome describes: the open shift's venue, else the signer-as-owner's. Fetched once for top bar and menu. */
+type Browsed = TeamData;
+
+/** The team the chrome describes: the open shift's team, else yours. Fetched once for top bar and menu. */
 function Chrome({ route, onMenu, children }: { route: string[]; onMenu: () => void; children: React.ReactNode }) {
-  const { owner } = useActors();
   const { tick } = useTx();
-  const shiftOwner = useShiftOwner(route[0] === "shift" ? parseKey(route[1] ?? "") : null);
-  const browsed = useVenue(route[0] === "shift" ? shiftOwner : owner.publicKey, tick, 20000);
-  const section = route[0] === "venue" || route[0] === "owner" || route[0] === "shift" ? "venue" : "home";
+  const mine = useMyTeam();
+  const shiftTeam = useShiftTeam(route[0] === "shift" ? parseKey(route[1] ?? "") : null);
+  const other = route[0] === "shift" && shiftTeam && !(mine.key && shiftTeam.equals(mine.key)) ? shiftTeam : null;
+  const otherData = useTeamData(other, tick, 20000);
+  const browsed = other ? otherData : mine;
+  const section = isTeamRoute(route) || route[0] === "shift" ? "team" : "home";
   return (
     <>
       <Rail section={section} />
       <div className="main-col">
         <TopBar route={route} onMenu={onMenu} browsed={browsed} />
         <div className="workspace">
-          {section === "venue" && <SubMenu route={route} browsed={browsed} />}
+          {section === "team" && <SubMenu route={route} browsed={browsed} />}
           {children}
         </div>
       </div>
@@ -184,7 +191,7 @@ function Chrome({ route, onMenu, children }: { route: string[]; onMenu: () => vo
 }
 
 /** Narrow icon rail; expands over the page on hover to show labels. */
-function Rail({ section }: { section: "home" | "venue" }) {
+function Rail({ section }: { section: "home" | "team" }) {
   return (
     <nav className="rail" aria-label="Main">
       <a className="rail-logo" href="#/" aria-label="Jar">
@@ -195,9 +202,9 @@ function Rail({ section }: { section: "home" | "venue" }) {
         <Icon name="home" size={18} />
         <span className="rail-label">Overview</span>
       </a>
-      <a className={`rail-item ${section === "venue" ? "on" : ""}`} href="#/venue" data-tour="nav-venue">
-        <Icon name="store" size={18} />
-        <span className="rail-label">Venue & shifts</span>
+      <a className={`rail-item ${section === "team" ? "on" : ""}`} href="#/team" data-tour="nav-team">
+        <Icon name="users" size={18} />
+        <span className="rail-label">Team & shifts</span>
       </a>
       <div className="rail-spacer" />
       <a className="rail-item" href={explorerAddr(PROGRAM_ID)} target="_blank" rel="noreferrer">
@@ -209,12 +216,12 @@ function Rail({ section }: { section: "home" | "venue" }) {
 }
 
 function TopBar({ route, onMenu, browsed }: { route: string[]; onMenu: () => void; browsed: Browsed }) {
-  const { venue, shifts } = browsed;
+  const { team, shifts } = browsed;
   const shift = route[0] === "shift" ? shifts.find((s) => s.key.toBase58() === route[1]) : undefined;
   const crumbs: { label: string; href?: string }[] = [{ label: "Jar", href: "#/" }];
-  if (route[0] === "venue" || route[0] === "owner" || route[0] === "shift") crumbs.push({ label: venue?.name ?? "Venue", href: "#/venue" });
+  if (isTeamRoute(route) || route[0] === "shift") crumbs.push({ label: team?.name ?? "Team", href: "#/team" });
   if (route[0] === "shift") crumbs.push({ label: shift ? shift.acc.label || `Shift ${shift.acc.index.toNumber() + 1}` : "Shift" });
-  if (route[0] === "venue" && route[1] === "new") crumbs.push({ label: "New shift" });
+  if (isTeamRoute(route) && route[1] === "new") crumbs.push({ label: "New shift" });
 
   return (
     <header className="topbar">
@@ -249,29 +256,29 @@ function HelpButton() {
   );
 }
 
-/** Secondary menu for the venue section: settings plus the list of shifts. */
+/** Secondary menu for the team section: the team plus the list of shifts. */
 function SubMenu({ route, browsed }: { route: string[]; browsed: Browsed }) {
   const now = useChainNow();
-  const { venue, shifts } = browsed;
+  const { team, shifts } = browsed;
   const here = route.join("/");
   return (
     <aside className="submenu">
-      <div className="submenu-title">{venue?.name ?? "Venue"}</div>
+      <div className="submenu-title">{team?.name ?? "Team"}</div>
       <div className="submenu-group">
-        <a className={`submenu-item ${here === "venue" || here === "owner" ? "on" : ""}`} href="#/venue">
-          <Icon name="settings" size={14} /> Venue
+        <a className={`submenu-item ${isTeamRoute(route) && route.length === 1 ? "on" : ""}`} href="#/team">
+          <Icon name="users" size={14} /> Team
         </a>
       </div>
       <div className="submenu-group grow">
         <div className="submenu-heading">
           Shifts
-          {venue && (
-            <a className="icon-btn small" href="#/venue/new" aria-label="New shift" title="New shift">
+          {team && (
+            <a className="icon-btn small" href="#/team/new" aria-label="New shift" title="New shift">
               <Icon name="plus" size={14} />
             </a>
           )}
         </div>
-        {shifts.length === 0 && <div className="submenu-empty">{venue ? "No shifts yet" : "Create a venue first"}</div>}
+        {shifts.length === 0 && <div className="submenu-empty">{team ? "No shifts yet" : "Start a team first"}</div>}
         {shifts.slice(0, 12).map(({ key, acc }) => {
           const st = statusOf(acc, now);
           return (

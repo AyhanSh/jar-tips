@@ -1,18 +1,19 @@
-//! Napiwek — a restaurant tip pool the owner cannot touch.
+//! Napiwek (Jar): restaurant tips with no owner and no middleman.
 //!
-//! Today, card and QR tips land in the owner's account and staff have to trust
-//! the owner to pass them on (and to split them fairly). Here, every shift has
-//! its own vault whose only authority is a PDA of this program. There is no
-//! instruction that pays the owner, and no admin key:
+//! Today, card and QR tips land in the restaurant's account and staff have to
+//! trust the owner to pass them on and split them fairly. Here the restaurant is
+//! not part of the system at all. The people who earn the tips run the jar:
 //!
-//!   * owner opens a shift with the roster          -> vault created, owner's job is done
-//!   * customers tip by QR                          -> tokens go straight into the vault
-//!   * each staff member submits their own hours    -> any change resets confirmations
-//!   * a majority of the roster confirms the hours  -> ANYONE can trigger the pro-rata split
-//!   * nobody reaches a majority before the window  -> ANYONE can trigger an equal split
+//!   * a team member starts a team with their coworkers -> no owner, no admin key
+//!   * adding or removing a coworker                     -> needs a majority of the team
+//!   * any team member opens a shift                     -> a vault only this program controls
+//!   * customers tip by QR                               -> tokens go straight into the vault
+//!   * each person submits their own hours               -> any change resets confirmations
+//!   * a majority of the shift confirms the hours        -> ANYONE can trigger the pro-rata split
+//!   * nobody reaches a majority before the window       -> ANYONE can trigger an equal split
 //!
-//! The owner can add people to a running shift (someone covers), but can never
-//! remove anyone, never edit hours, never confirm, and never be paid.
+//! No account has special rights. Whoever creates the team or opens a shift
+//! only pays a little rent, and gets that rent back.
 
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
@@ -20,7 +21,7 @@ use anchor_spl::token_interface::{
     self, CloseAccount, Mint, TokenAccount, TokenInterface, TransferChecked,
 };
 
-declare_id!("APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X");
+declare_id!("HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD");
 
 pub const MAX_STAFF: usize = 12;
 pub const MAX_NAME_LEN: usize = 32;
@@ -29,36 +30,107 @@ pub const MAX_SHIFT_MINUTES: u16 = 24 * 60;
 /// 60 seconds minimum so the "nobody confirmed" fallback can be shown live in a demo.
 pub const MIN_CONFIRM_WINDOW: i64 = 60;
 pub const MAX_CONFIRM_WINDOW: i64 = 60 * 60 * 24 * 14;
+/// After this, anyone on the team may replace a proposal that never passed.
+pub const PROPOSAL_TTL: i64 = 60 * 60 * 24;
 
 #[program]
 pub mod napiwek {
     use super::*;
 
-    /// One venue per owner wallet. Fixes the tip currency and how long staff get
-    /// to agree on hours before the equal-split fallback kicks in.
-    pub fn create_venue(ctx: Context<CreateVenue>, name: String, confirm_window: i64) -> Result<()> {
+    /// A team member starts the team with their coworkers. Fixes the tip currency
+    /// and how long people get to agree on hours before the equal split kicks in.
+    /// The creator must be on the team and gets no extra rights.
+    pub fn create_team(
+        ctx: Context<CreateTeam>,
+        name: String,
+        confirm_window: i64,
+        members: Vec<MemberInput>,
+    ) -> Result<()> {
         require!(!name.is_empty() && name.len() <= MAX_NAME_LEN, TipError::NameTooLong);
         require!(
             (MIN_CONFIRM_WINDOW..=MAX_CONFIRM_WINDOW).contains(&confirm_window),
             TipError::InvalidWindow
         );
-        let venue = &mut ctx.accounts.venue;
-        venue.owner = ctx.accounts.owner.key();
-        venue.mint = ctx.accounts.mint.key();
-        venue.name = name;
-        venue.confirm_window = confirm_window;
-        venue.shift_count = 0;
-        venue.bump = ctx.bumps.venue;
+        require!(!members.is_empty() && members.len() <= MAX_STAFF, TipError::InvalidRoster);
+        let creator = ctx.accounts.creator.key();
+        require!(members.iter().any(|m| m.wallet == creator), TipError::CreatorNotMember);
+
+        let team = &mut ctx.accounts.team;
+        team.creator = creator;
+        team.mint = ctx.accounts.mint.key();
+        team.name = name;
+        team.confirm_window = confirm_window;
+        team.shift_count = 0;
+        team.bump = ctx.bumps.team;
+        team.members = Vec::with_capacity(members.len());
+        for m in members {
+            team.push_member(m.wallet, m.name)?;
+        }
+        team.proposal_count = 0;
+        team.proposal = None;
+        emit!(TeamCreated { team: team.key(), members: team.members.len() as u8 });
         Ok(())
     }
 
-    /// Owner opens a shift: who is working and for how long. After this the
-    /// owner has no say over the money that lands in the vault.
+    /// A team member proposes adding (`add = true`) or removing a coworker. It
+    /// takes effect once more than half the team approves; the proposer's vote
+    /// counts right away. One proposal at a time: only its proposer can replace
+    /// it, or anyone once it is a day old.
+    pub fn propose(ctx: Context<MemberAction>, add: bool, wallet: Pubkey, name: String) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let me = ctx.accounts.member.key();
+        let team = &mut ctx.accounts.team;
+        let i = team.member_index(&me)?;
+        if let Some(p) = &team.proposal {
+            require!(
+                p.proposer == me || now >= p.created_at.saturating_add(PROPOSAL_TTL),
+                TipError::ProposalPending
+            );
+        }
+        if add {
+            require!(!name.is_empty() && name.len() <= MAX_STAFF_NAME_LEN, TipError::NameTooLong);
+            require!(team.members.len() < MAX_STAFF, TipError::InvalidRoster);
+            require!(team.members.iter().all(|m| m.wallet != wallet), TipError::DuplicateStaff);
+        } else {
+            team.member_index(&wallet)?;
+            require!(team.members.len() > 1, TipError::LastMember);
+        }
+        team.proposal_count += 1;
+        team.proposal = Some(Proposal {
+            id: team.proposal_count,
+            add,
+            wallet,
+            name: if add { name } else { String::new() },
+            proposer: me,
+            created_at: now,
+            votes: 1 << i,
+        });
+        emit!(Proposed { team: team.key(), id: team.proposal_count, add, wallet });
+        let key = team.key();
+        team.apply_if_passed(key)
+    }
+
+    /// A team member approves the open proposal. Passing its id means nobody can
+    /// be tricked into approving a different proposal that replaced it.
+    pub fn vote(ctx: Context<MemberAction>, id: u32) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let team = &mut ctx.accounts.team;
+        let i = team.member_index(&ctx.accounts.member.key())?;
+        let p = team.proposal.as_mut().ok_or(TipError::NoProposal)?;
+        require!(p.id == id, TipError::WrongProposal);
+        require!(now < p.created_at.saturating_add(PROPOSAL_TTL), TipError::ProposalExpired);
+        p.votes |= 1 << i;
+        let key = team.key();
+        team.apply_if_passed(key)
+    }
+
+    /// Any team member opens a shift for the coworkers working it. Only team
+    /// members can be on it, so nobody can slip in a fake name.
     pub fn open_shift(
         ctx: Context<OpenShift>,
         label: String,
         scheduled_minutes: u16,
-        staff: Vec<StaffInput>,
+        workers: Vec<Pubkey>,
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         require!(label.len() <= MAX_NAME_LEN, TipError::NameTooLong);
@@ -66,60 +138,65 @@ pub mod napiwek {
             scheduled_minutes > 0 && scheduled_minutes <= MAX_SHIFT_MINUTES,
             TipError::InvalidShiftLength
         );
-        require!(!staff.is_empty() && staff.len() <= MAX_STAFF, TipError::InvalidRoster);
+        require!(!workers.is_empty() && workers.len() <= MAX_STAFF, TipError::InvalidRoster);
 
-        let venue = &mut ctx.accounts.venue;
+        let team = &mut ctx.accounts.team;
+        team.member_index(&ctx.accounts.opener.key())?;
         let shift = &mut ctx.accounts.shift;
-        shift.venue = venue.key();
-        shift.owner = venue.owner;
-        shift.mint = venue.mint;
-        shift.index = venue.shift_count;
+        shift.team = team.key();
+        shift.opened_by = ctx.accounts.opener.key();
+        shift.mint = team.mint;
+        shift.index = team.shift_count;
         shift.bump = ctx.bumps.shift;
         shift.label = label;
         shift.opened_at = now;
         shift.closes_at = now + scheduled_minutes as i64 * 60;
         shift.scheduled_minutes = scheduled_minutes;
-        shift.confirm_window = venue.confirm_window;
+        shift.confirm_window = team.confirm_window;
         shift.version = 1;
-        shift.staff = Vec::with_capacity(staff.len());
-        for s in staff {
-            shift.push_staff(s.wallet, s.name)?;
+        shift.staff = Vec::with_capacity(workers.len());
+        for w in workers {
+            let m = &team.members[team.member_index(&w)?];
+            shift.push_staff(m.wallet, m.name.clone())?;
         }
-        venue.shift_count += 1;
+        team.shift_count += 1;
 
         emit!(ShiftOpened {
             shift: shift.key(),
-            venue: shift.venue,
+            team: shift.team,
             staff: shift.staff.len() as u8,
             closes_at: shift.closes_at,
         });
         Ok(())
     }
 
-    /// Someone covers part of the shift. The owner can only ever ADD people, and
-    /// only while the shift is running; nobody can be removed. Resets confirmations.
-    pub fn add_staff(ctx: Context<OwnerAction>, wallet: Pubkey, name: String) -> Result<()> {
-        let now = Clock::get()?.unix_timestamp;
+    /// A team member who is working but wasn't listed adds themselves (someone
+    /// covers, or the opener forgot them). Nobody can add anyone else, and nobody
+    /// can be removed. Resets confirmations.
+    pub fn join_shift(ctx: Context<JoinShift>) -> Result<()> {
+        let team = &ctx.accounts.team;
         let shift = &mut ctx.accounts.shift;
         require!(!shift.settled, TipError::AlreadySettled);
-        require!(now < shift.closes_at, TipError::ShiftClosed);
-        shift.push_staff(wallet, name)?;
+        let m = &team.members[team.member_index(&ctx.accounts.member.key())?];
+        shift.push_staff(m.wallet, m.name.clone())?;
         shift.version += 1;
+        emit!(Joined { shift: shift.key(), staff: m.wallet });
         Ok(())
     }
 
-    /// Owner closes the shift early (kitchen closed). Only ever moves the end
-    /// time earlier; a shift also closes by itself at its scheduled end.
-    pub fn end_shift(ctx: Context<OwnerAction>) -> Result<()> {
+    /// Someone working the shift closes it early (kitchen closed). Only ever moves
+    /// the end time earlier; a shift also closes by itself at its scheduled end.
+    pub fn end_shift(ctx: Context<StaffAction>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let shift = &mut ctx.accounts.shift;
         require!(!shift.settled, TipError::AlreadySettled);
+        shift.staff_index(&ctx.accounts.staff.key())?;
         shift.closes_at = shift.closes_at.min(now);
         Ok(())
     }
 
     /// A customer tips. Tokens move straight from their wallet into the shift
-    /// vault; the owner's account is not involved at all.
+    /// vault; no restaurant account is involved at all.
     pub fn tip(ctx: Context<Tip>, amount: u64) -> Result<()> {
         require!(amount > 0, TipError::ZeroAmount);
         require!(!ctx.accounts.shift.settled, TipError::AlreadySettled);
@@ -185,10 +262,10 @@ pub mod napiwek {
 
     /// THE MOMENT THE INTERMEDIARY DISAPPEARS.
     ///
-    /// Anyone can call this: a waiter, a bot, the owner, a stranger. The caller
-    /// cannot choose where the money goes. The payout accounts must be passed in
-    /// roster order and each must belong to the staff member at that position;
-    /// the vault's only authority is the shift PDA, so this function is the single
+    /// Anyone can call this: a waiter, a bot, a stranger. The caller cannot
+    /// choose where the money goes. The payout accounts must be passed in roster
+    /// order and each must belong to the staff member at that position; the
+    /// vault's only authority is the shift PDA, so this function is the single
     /// exit door for tips.
     ///
     ///   * majority of the roster confirmed the current hours -> split pro-rata by minutes
@@ -233,7 +310,7 @@ pub mod napiwek {
         let index_bytes = shift.index.to_le_bytes();
         let signer_seeds: &[&[&[u8]]] = &[&[
             b"shift",
-            shift.venue.as_ref(),
+            shift.team.as_ref(),
             index_bytes.as_ref(),
             &[shift.bump],
         ]];
@@ -257,13 +334,13 @@ pub mod napiwek {
             )?;
         }
 
-        // The empty vault is closed so no late tip can get stuck; its rent
-        // (paid by the owner when opening the shift) goes back to the owner.
+        // The empty vault is closed so no late tip can get stuck; its rent goes
+        // back to whoever paid it when opening the shift. Tips never do.
         token_interface::close_account(CpiContext::new_with_signer(
             ctx.accounts.token_program.key(),
             CloseAccount {
                 account: ctx.accounts.vault.to_account_info(),
-                destination: ctx.accounts.owner.to_account_info(),
+                destination: ctx.accounts.opened_by.to_account_info(),
                 authority: ctx.accounts.shift.to_account_info(),
             },
             signer_seeds,
@@ -314,11 +391,49 @@ pub fn split(pool: u64, weights: &[u64]) -> Vec<u64> {
     shares
 }
 
+/// More than half of `n` (bits set in `votes` among the first `n`).
+pub fn passes(votes: u16, n: usize) -> bool {
+    let mask: u32 = (1u32 << n) - 1;
+    (votes as u32 & mask).count_ones() as usize * 2 > n
+}
+
+impl Team {
+    fn push_member(&mut self, wallet: Pubkey, name: String) -> Result<()> {
+        require!(self.members.len() < MAX_STAFF, TipError::InvalidRoster);
+        require!(!name.is_empty() && name.len() <= MAX_STAFF_NAME_LEN, TipError::NameTooLong);
+        require!(self.members.iter().all(|m| m.wallet != wallet), TipError::DuplicateStaff);
+        self.members.push(Member { wallet, name });
+        Ok(())
+    }
+
+    fn member_index(&self, wallet: &Pubkey) -> Result<usize> {
+        self.members
+            .iter()
+            .position(|m| m.wallet == *wallet)
+            .ok_or_else(|| error!(TipError::NotMember))
+    }
+
+    /// Applies the open proposal once a majority of the current team approves.
+    fn apply_if_passed(&mut self, key: Pubkey) -> Result<()> {
+        let Some(p) = self.proposal.clone() else { return Ok(()) };
+        if !passes(p.votes, self.members.len()) {
+            return Ok(());
+        }
+        if p.add {
+            self.push_member(p.wallet, p.name)?;
+        } else {
+            let i = self.member_index(&p.wallet)?;
+            self.members.remove(i);
+        }
+        self.proposal = None;
+        emit!(TeamChanged { team: key, id: p.id, add: p.add, wallet: p.wallet });
+        Ok(())
+    }
+}
+
 impl Shift {
     fn push_staff(&mut self, wallet: Pubkey, name: String) -> Result<()> {
         require!(self.staff.len() < MAX_STAFF, TipError::InvalidRoster);
-        require!(name.len() <= MAX_STAFF_NAME_LEN, TipError::NameTooLong);
-        require_keys_neq!(wallet, self.owner, TipError::OwnerOnRoster);
         require!(
             self.staff.iter().all(|s| s.wallet != wallet),
             TipError::DuplicateStaff
@@ -354,48 +469,54 @@ impl Shift {
 // ---------------------------------------------------------------------------
 
 #[derive(Accounts)]
-pub struct CreateVenue<'info> {
+pub struct CreateTeam<'info> {
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub creator: Signer<'info>,
     #[account(mint::token_program = token_program)]
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(
         init,
-        payer = owner,
-        space = 8 + Venue::INIT_SPACE,
-        seeds = [b"venue", owner.key().as_ref()],
+        payer = creator,
+        space = 8 + Team::INIT_SPACE,
+        seeds = [b"team", creator.key().as_ref()],
         bump,
     )]
-    pub venue: Account<'info, Venue>,
+    pub team: Account<'info, Team>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct OpenShift<'info> {
+pub struct MemberAction<'info> {
+    /// Must be on the team; checked in the instruction.
+    pub member: Signer<'info>,
     #[account(mut)]
-    pub owner: Signer<'info>,
-    #[account(
-        mut,
-        has_one = owner @ TipError::Unauthorized,
-        has_one = mint,
-        seeds = [b"venue", owner.key().as_ref()],
-        bump = venue.bump,
-    )]
-    pub venue: Account<'info, Venue>,
+    pub team: Account<'info, Team>,
+}
+
+#[derive(Accounts)]
+pub struct OpenShift<'info> {
+    /// Must be on the team; checked in the instruction. Pays the rent, gets it back at payout.
+    #[account(mut)]
+    pub opener: Signer<'info>,
+    #[account(mut, has_one = mint)]
+    pub team: Account<'info, Team>,
     #[account(mint::token_program = token_program)]
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(
         init,
-        payer = owner,
+        payer = opener,
         space = 8 + Shift::INIT_SPACE,
-        seeds = [b"shift", venue.key().as_ref(), venue.shift_count.to_le_bytes().as_ref()],
+        seeds = [b"shift", team.key().as_ref(), team.shift_count.to_le_bytes().as_ref()],
         bump,
     )]
     pub shift: Account<'info, Shift>,
+    /// `init_if_needed`: the address is predictable, so someone could create it
+    /// first to block the shift. If it exists it must still be the shift's own
+    /// account for this mint, and anything already in it is shared like a tip.
     #[account(
-        init,
-        payer = owner,
+        init_if_needed,
+        payer = opener,
         associated_token::mint = mint,
         associated_token::authority = shift,
         associated_token::token_program = token_program,
@@ -407,15 +528,17 @@ pub struct OpenShift<'info> {
 }
 
 #[derive(Accounts)]
-pub struct OwnerAction<'info> {
-    pub owner: Signer<'info>,
-    #[account(mut, has_one = owner @ TipError::Unauthorized)]
+pub struct JoinShift<'info> {
+    /// Must be on the team; checked in the instruction.
+    pub member: Signer<'info>,
+    pub team: Account<'info, Team>,
+    #[account(mut, has_one = team)]
     pub shift: Account<'info, Shift>,
 }
 
 #[derive(Accounts)]
 pub struct StaffAction<'info> {
-    /// Must be on the roster; checked in the instruction.
+    /// Must be on the shift's roster; checked in the instruction.
     pub staff: Signer<'info>,
     #[account(mut)]
     pub shift: Account<'info, Shift>,
@@ -453,15 +576,15 @@ pub struct Settle<'info> {
     pub caller: Signer<'info>,
     #[account(
         mut,
-        has_one = owner,
+        has_one = opened_by,
         has_one = mint,
-        seeds = [b"shift", shift.venue.as_ref(), shift.index.to_le_bytes().as_ref()],
+        seeds = [b"shift", shift.team.as_ref(), shift.index.to_le_bytes().as_ref()],
         bump = shift.bump,
     )]
     pub shift: Account<'info, Shift>,
-    /// CHECK: pinned by `has_one = owner`; only receives the vault's rent back.
+    /// CHECK: pinned by `has_one = opened_by`; only receives the vault's rent back.
     #[account(mut)]
-    pub owner: UncheckedAccount<'info>,
+    pub opened_by: UncheckedAccount<'info>,
     #[account(mint::token_program = token_program)]
     pub mint: InterfaceAccount<'info, Mint>,
     #[account(
@@ -480,23 +603,49 @@ pub struct Settle<'info> {
 
 #[account]
 #[derive(InitSpace)]
-pub struct Venue {
-    pub owner: Pubkey,
+pub struct Team {
+    /// Paid the rent and seeds the address. No special rights.
+    pub creator: Pubkey,
     pub mint: Pubkey,
     #[max_len(MAX_NAME_LEN)]
     pub name: String,
-    /// Seconds after the shift closes before the equal-split fallback is allowed.
+    /// Seconds after a shift closes before the equal-split fallback is allowed.
     pub confirm_window: i64,
     pub shift_count: u64,
     pub bump: u8,
+    #[max_len(MAX_STAFF)]
+    pub members: Vec<Member>,
+    pub proposal_count: u32,
+    pub proposal: Option<Proposal>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+pub struct Member {
+    pub wallet: Pubkey,
+    #[max_len(MAX_STAFF_NAME_LEN)]
+    pub name: String,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, InitSpace)]
+pub struct Proposal {
+    pub id: u32,
+    /// true: add `wallet` as `name`. false: remove `wallet`.
+    pub add: bool,
+    pub wallet: Pubkey,
+    #[max_len(MAX_STAFF_NAME_LEN)]
+    pub name: String,
+    pub proposer: Pubkey,
+    pub created_at: i64,
+    /// Bit i set = members[i] approved.
+    pub votes: u16,
 }
 
 #[account]
 #[derive(InitSpace)]
 pub struct Shift {
-    pub venue: Pubkey,
-    /// Stored only to pin the rent refund and the owner-only actions. Never paid tips.
-    pub owner: Pubkey,
+    pub team: Pubkey,
+    /// Paid the rent; gets the vault's rent back at payout. Never paid tips for it.
+    pub opened_by: Pubkey,
     pub mint: Pubkey,
     pub index: u64,
     pub bump: u8,
@@ -530,7 +679,7 @@ pub struct StaffEntry {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct StaffInput {
+pub struct MemberInput {
     pub wallet: Pubkey,
     pub name: String,
 }
@@ -540,11 +689,39 @@ pub struct StaffInput {
 // ---------------------------------------------------------------------------
 
 #[event]
+pub struct TeamCreated {
+    pub team: Pubkey,
+    pub members: u8,
+}
+
+#[event]
+pub struct Proposed {
+    pub team: Pubkey,
+    pub id: u32,
+    pub add: bool,
+    pub wallet: Pubkey,
+}
+
+#[event]
+pub struct TeamChanged {
+    pub team: Pubkey,
+    pub id: u32,
+    pub add: bool,
+    pub wallet: Pubkey,
+}
+
+#[event]
 pub struct ShiftOpened {
     pub shift: Pubkey,
-    pub venue: Pubkey,
+    pub team: Pubkey,
     pub staff: u8,
     pub closes_at: i64,
+}
+
+#[event]
+pub struct Joined {
+    pub shift: Pubkey,
+    pub staff: Pubkey,
 }
 
 #[event]
@@ -590,24 +767,32 @@ pub enum TipError {
     InvalidWindow,
     #[msg("Shift length must be 1 minute to 24 hours")]
     InvalidShiftLength,
-    #[msg("A shift needs between 1 and 12 staff")]
+    #[msg("A team or shift needs between 1 and 12 people")]
     InvalidRoster,
-    #[msg("The owner cannot be on the tip roster")]
-    OwnerOnRoster,
-    #[msg("This wallet is already on the roster")]
+    #[msg("Whoever starts the team must be on it")]
+    CreatorNotMember,
+    #[msg("This wallet is already listed")]
     DuplicateStaff,
+    #[msg("Signer is not on this team")]
+    NotMember,
     #[msg("Signer is not on this shift's roster")]
     NotOnRoster,
-    #[msg("Only the owner can do this")]
-    Unauthorized,
+    #[msg("Another proposal is still open")]
+    ProposalPending,
+    #[msg("There is no open proposal")]
+    NoProposal,
+    #[msg("The proposal changed since you looked; review it again")]
+    WrongProposal,
+    #[msg("The proposal expired")]
+    ProposalExpired,
+    #[msg("A team can't remove its last member")]
+    LastMember,
     #[msg("Tip amount must be greater than zero")]
     ZeroAmount,
     #[msg("Arithmetic overflow")]
     Overflow,
     #[msg("Shift has already been settled")]
     AlreadySettled,
-    #[msg("Shift is closed")]
-    ShiftClosed,
     #[msg("Shift is still running")]
     ShiftStillOpen,
     #[msg("More minutes than the shift lasted")]
@@ -622,7 +807,7 @@ pub enum TipError {
 
 #[cfg(test)]
 mod tests {
-    use super::split;
+    use super::{passes, split};
 
     #[test]
     fn splits_pro_rata_without_losing_dust() {
@@ -636,5 +821,20 @@ mod tests {
         assert_eq!(split(10, &[1, 1, 1]), vec![4, 3, 3]);
         assert_eq!(split(0, &[5, 5]), vec![0, 0]);
         assert_eq!(split(7, &[0, 0]), vec![0, 0]);
+    }
+
+    #[test]
+    fn majority_of_the_team() {
+        assert!(passes(0b1, 1));
+        assert!(!passes(0b01, 2));
+        assert!(passes(0b11, 2));
+        assert!(!passes(0b001, 3));
+        assert!(passes(0b101, 3));
+        assert!(!passes(0b0011, 4));
+        assert!(passes(0b0111, 4));
+        // bits beyond the team size don't count
+        assert!(!passes(0b1000_0001, 3));
+        assert!(passes(0xFFF, 12));
+        assert!(!passes(0b11_1111, 12));
     }
 }

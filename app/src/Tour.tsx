@@ -16,27 +16,28 @@ interface Step {
   text: string;
   /** "click": the step is about pressing the lit control (Next presses it). */
   action?: "click";
-  /** Skip silently when the target isn't on the page (e.g. venue already exists). */
+  /** Skip silently when the target isn't on the page (e.g. the team already exists). */
   optional?: boolean;
   /** How long to wait for the target to appear, e.g. while a transaction confirms. */
   wait?: number;
 }
 
 const STEPS: Step[] = [
-  { art: "jar", title: "Tips the owner can't touch", text: "A 60-second walk through a sample shift. Follow the light. Nothing is sent." },
-  { target: '[data-tour="signer"]', art: "wallets", title: "Who's acting", text: "Owner, staff or guest. Switch here any time." },
-  { target: '[data-tour="nav-venue"]', art: "store", title: "Your venue", text: "Open it.", action: "click" },
-  { target: '[data-tour="create-venue"]', art: "store", title: "Create the venue", text: "Once per owner. Gives no access to tips.", action: "click", optional: true, wait: 1500 },
-  { target: '[data-tour="new-shift"]', art: "store", title: "New shift", text: "Start a shift to get a tip vault.", action: "click", wait: 60000 },
-  { target: '[data-tour="demo-crew"]', art: "team", title: "Who's working", text: "Fill in the demo crew.", action: "click" },
-  { target: '[data-tour="open-shift"]', art: "jar", title: "Open the shift", text: "Creates the vault. The owner's last say.", action: "click" },
+  { art: "jar", title: "Tips with no middleman", text: "A 60-second walk through a sample shift. No owner anywhere. Follow the light; nothing is sent." },
+  { target: '[data-tour="signer"]', art: "wallets", title: "Who's acting", text: "A coworker or a guest. Switch here any time." },
+  { target: '[data-tour="nav-team"]', art: "team", title: "Your team", text: "Open it.", action: "click" },
+  { target: '[data-tour="create-team"]', art: "team", title: "Start the team", text: "A waiter starts it with their coworkers. It gives nobody special rights.", action: "click", optional: true, wait: 1500 },
+  { target: '[data-tour="crew"]', art: "team", title: "The team decides", text: "Adding or removing someone needs more than half the votes. Here Ana proposed Ola.", wait: 60000 },
+  { target: '[data-tour="new-shift"]', art: "jar", title: "New shift", text: "Anyone on the team can open one.", action: "click" },
+  { target: '[data-tour="workers"]', art: "team", title: "Who's working", text: "Only team members can be picked. Anyone left out can add themselves later." },
+  { target: '[data-tour="open-shift"]', art: "jar", title: "Open the shift", text: "Creates a vault that only the program controls.", action: "click" },
   { target: '[data-tour="stats"]', art: "split", title: "Live shift", text: "Money in the vault, agreement and time. Straight from the chain.", wait: 90000 },
   { target: '[data-tour="tip-link"]', art: "phone", title: "Show QR", text: "Guests scan it and tip. Money goes straight into the vault." },
   { target: '[data-tour="your-actions"]', art: "clock", title: "What happens next", text: "Only the current step is open. Each button names who it acts as." },
-  { target: '[data-tour="team"]', art: "team", title: "Details, one tab at a time", text: "Team split, QR, owner tools and on-chain activity." },
-  { target: '[data-tour="security"]', art: "shield", title: "Owner tools", text: "Open it and try to steal. Both attempts fail on-chain.", action: "click", optional: true, wait: 1500 },
-  { art: "split", title: "Pay out", text: "When most agree, Pay out appears. Anyone can press it." },
-  { art: "store", title: "Your turn", text: "That was sample data. Now create your own venue and run a real shift." },
+  { target: '[data-tour="team"]', art: "team", title: "Details, one tab at a time", text: "Who gets what, the QR, cheating attempts and on-chain activity." },
+  { target: '[data-tour="security"]', art: "shield", title: "Try to cheat", text: "Play the restaurant: withdraw, redirect, join. Every try fails on-chain.", action: "click", optional: true, wait: 1500 },
+  { art: "split", title: "Pay out", text: "When most of the shift agrees, Pay out appears. Anyone can press it." },
+  { art: "team", title: "Your turn", text: "That was sample data. Now start your own team and run a real shift." },
 ];
 
 export function useTour() {
