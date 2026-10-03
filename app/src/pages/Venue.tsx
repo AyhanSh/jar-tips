@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { PublicKey } from "@solana/web3.js";
 import { useActors, type Actor } from "../actors";
 import { useTx } from "../App";
@@ -18,7 +18,7 @@ import {
   statusOf,
   txOf,
 } from "../solana";
-import { Callout, ExtLink, Icon, Prop, Properties, Tag } from "../ui";
+import { Callout, ExtLink, Icon, PageHeader, Panel, Prop, Properties, Tag } from "../ui";
 
 const WINDOWS = [
   { secs: 60, label: "1 minute (for demos)" },
@@ -27,77 +27,76 @@ const WINDOWS = [
 ];
 const windowLabel = (s: number) => WINDOWS.find((w) => w.secs === s)?.label ?? `${s} seconds`;
 
-export default function Venue() {
+/** Horizontal form row: label and hint on the left, control on the right. */
+function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string | null; children: ReactNode }) {
+  return (
+    <div className="field-row">
+      <div className="field-meta">
+        <label>{label}</label>
+        {hint && <p>{hint}</p>}
+      </div>
+      <div className="field-control">
+        {children}
+        {error && <em className="field-err">{error}</em>}
+      </div>
+    </div>
+  );
+}
+
+export default function Venue({ creating }: { creating: boolean }) {
   const { owner } = useActors();
   const { tick } = useTx();
   const now = useChainNow();
   const { venue, shifts } = useVenue(owner.publicKey, tick);
-  const [creating, setCreating] = useState(false);
 
   if (!owner.publicKey)
     return (
-      <article className="doc">
-        <h1 className="title">Venue</h1>
-        <Callout icon="wallet">
-          Connect a wallet in the sidebar to act as the owner. No browser wallet? Choose <b>Demo owner</b> under Signing as.
+      <div className="page">
+        <PageHeader title="Venue" description="Register a venue and open shifts." />
+        <Callout icon="wallet" title="Connect a wallet to act as the owner">
+          Use <b>Select Wallet</b> in the top bar. No browser wallet? Choose <b>Demo owner</b> in the signer menu.
         </Callout>
-      </article>
+      </div>
     );
   if (venue === undefined)
     return (
-      <article className="doc">
+      <div className="page">
         <div className="skeleton title-skel" />
-        <div className="skeleton" />
-      </article>
+        <div className="skeleton block" />
+      </div>
     );
   if (venue === null) return <CreateVenue owner={owner} />;
+  if (creating) return <OpenShift owner={owner} nextIndex={venue.shiftCount.toNumber()} venueName={venue.name} />;
 
   return (
-    <article className="doc">
-      <h1 className="title">{venue.name}</h1>
-      <Properties>
-        <Prop icon="user" label="Owner">
-          <ExtLink href={explorerAddr(owner.publicKey)}>{short(owner.publicKey)}</ExtLink>
-          <span className="muted"> · {owner.name}</span>
-        </Prop>
-        <Prop icon="coins" label="Tip currency">
-          USDC <span className="muted">(devnet test token)</span>
-        </Prop>
-        <Prop icon="clock" label="Time to agree">
-          {windowLabel(venue.confirmWindow.toNumber())} after a shift ends
-        </Prop>
-        <Prop icon="hash" label="Shifts">
-          {venue.shiftCount.toString()}
-        </Prop>
-      </Properties>
-
-      <Callout icon="lock">
-        As the owner you can open shifts, add people to a running shift and end it early. You can't withdraw tips, change hours,
-        remove anyone or change how the pot is split.
-      </Callout>
-
-      <div className="section-head">
-        <h2>Shifts</h2>
-        {!creating && (
-          <button className="btn primary small" onClick={() => setCreating(true)}>
+    <div className="page">
+      <PageHeader
+        title={venue.name}
+        description="Your venue's fixed settings and every shift you've opened."
+        actions={
+          <a className="btn primary" href="#/venue/new">
             <Icon name="plus" size={14} /> New shift
-          </button>
-        )}
-      </div>
+          </a>
+        }
+      />
 
-      {creating && <OpenShift owner={owner} nextIndex={venue.shiftCount.toNumber()} onCancel={() => setCreating(false)} />}
-
-      {shifts.length === 0 && !creating ? (
-        <p className="muted">No shifts yet. Open one to get a tip QR code.</p>
-      ) : (
-        shifts.length > 0 && (
-          <table className="db clickable">
+      <Panel title="Shifts" flush>
+        {shifts.length === 0 ? (
+          <div className="empty">
+            <Icon name="list" size={20} />
+            <p>No shifts yet. Open one to get a tip QR code.</p>
+            <a className="btn" href="#/venue/new">
+              New shift
+            </a>
+          </div>
+        ) : (
+          <table className="grid clickable">
             <thead>
               <tr>
                 <th>Name</th>
                 <th>Opened</th>
                 <th>Team</th>
-                <th className="num">Tips</th>
+                <th className="num">Tips (USDC)</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -111,9 +110,9 @@ export default function Venue() {
                         {acc.label || `Shift ${acc.index.toNumber() + 1}`}
                       </a>
                     </td>
-                    <td className="muted">{new Date(acc.openedAt.toNumber() * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</td>
+                    <td className="muted mono">{new Date(acc.openedAt.toNumber() * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</td>
                     <td className="muted">{acc.staff.map((s) => s.name).join(", ")}</td>
-                    <td className="num">{fromUnits(acc.settled ? acc.paidOut : acc.totalTipped)}</td>
+                    <td className="num mono">{fromUnits(acc.settled ? acc.paidOut : acc.totalTipped)}</td>
                     <td>
                       <Tag tone={st.tone}>{st.label}</Tag>
                     </td>
@@ -122,9 +121,30 @@ export default function Venue() {
               })}
             </tbody>
           </table>
-        )
-      )}
-    </article>
+        )}
+      </Panel>
+
+      <Panel title="Settings" description="Fixed when the venue was created. Nobody can change them.">
+        <Properties>
+          <Prop label="Owner">
+            <ExtLink href={explorerAddr(owner.publicKey)}>
+              <span className="mono">{short(owner.publicKey, 6)}</span>
+            </ExtLink>
+            <span className="muted">{owner.name}</span>
+          </Prop>
+          <Prop label="Tip currency">
+            USDC <span className="muted">devnet test token</span>
+          </Prop>
+          <Prop label="Time to agree">{windowLabel(venue.confirmWindow.toNumber())} after a shift ends</Prop>
+          <Prop label="Shifts opened">{venue.shiftCount.toString()}</Prop>
+        </Properties>
+      </Panel>
+
+      <Callout icon="lock" title="What the owner can and can't do">
+        You can open shifts, add people to a running shift and end it early. You can't withdraw tips, change anyone's hours, remove
+        anyone or change how the pot is split.
+      </Callout>
+    </div>
   );
 }
 
@@ -137,17 +157,27 @@ function CreateVenue({ owner }: { owner: Actor }) {
   const nameErr = !name.trim() ? "Give your venue a name" : byteLen(name.trim()) > MAX_NAME_BYTES ? "That name is too long" : null;
 
   return (
-    <article className="doc">
-      <h1 className="title">Set up your venue</h1>
-      <p className="lede">One time. This records a name, the tip currency and how long staff get to agree on hours.</p>
-      <div className="form">
-        <label className="field">
-          <span>Venue name</span>
+    <div className="page narrow">
+      <PageHeader title="Create a venue" description="One time per owner wallet. This gives you no rights over any tips." />
+      <Panel
+        title="Venue details"
+        footer={
+          <>
+            <span className="muted small">Signed by {owner.name}</span>
+            <button
+              className="btn primary"
+              disabled={!!nameErr || !!pending}
+              onClick={() => run("Create venue", async () => send(txOf(await ixCreateVenue(program, owner.publicKey!, name.trim(), win)), { as: owner }))}
+            >
+              Create venue
+            </button>
+          </>
+        }
+      >
+        <Field label="Name" hint="Shown to guests on the tip page." error={nameErr}>
           <input value={name} onChange={(e) => setName(e.target.value)} />
-          {nameErr && <em className="field-err">{nameErr}</em>}
-        </label>
-        <label className="field">
-          <span>Time staff get to agree on hours</span>
+        </Field>
+        <Field label="Time to agree" hint="After a shift ends. If staff don't agree in time, anyone can split the pot equally.">
           <select value={win} onChange={(e) => setWin(Number(e.target.value))}>
             {WINDOWS.map((w) => (
               <option key={w.secs} value={w.secs}>
@@ -155,20 +185,9 @@ function CreateVenue({ owner }: { owner: Actor }) {
               </option>
             ))}
           </select>
-          <em className="field-hint">If they don't agree in time, anyone can split the pot equally.</em>
-        </label>
-        <div className="row gap">
-          <button
-            className="btn primary"
-            disabled={!!nameErr || !!pending}
-            onClick={() => run("Create venue", async () => send(txOf(await ixCreateVenue(program, owner.publicKey!, name.trim(), win)), { as: owner }))}
-          >
-            Create venue
-          </button>
-          <span className="muted small">Signed by {owner.name}</span>
-        </div>
-      </div>
-    </article>
+        </Field>
+      </Panel>
+    </div>
   );
 }
 
@@ -177,7 +196,7 @@ interface Row {
   wallet: string;
 }
 
-function OpenShift({ owner, nextIndex, onCancel }: { owner: Actor; nextIndex: number; onCancel: () => void }) {
+function OpenShift({ owner, nextIndex, venueName }: { owner: Actor; nextIndex: number; venueName: string }) {
   const program = useProgram();
   const { actors, send } = useActors();
   const { run, pending } = useTx();
@@ -218,66 +237,72 @@ function OpenShift({ owner, nextIndex, onCancel }: { owner: Actor; nextIndex: nu
     });
 
   return (
-    <div className="panel">
-      <div className="form two">
-        <label className="field">
-          <span>Shift name</span>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Friday dinner" />
-          {labelErr && <em className="field-err">{labelErr}</em>}
-        </label>
-        <label className="field">
-          <span>Length in hours</span>
-          <input inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value.replace(/[^0-9.]/g, ""))} />
-          {hoursErr ? <em className="field-err">{hoursErr}</em> : <em className="field-hint">Tipping closes after this. Nobody can claim more hours.</em>}
-        </label>
-      </div>
+    <div className="page narrow">
+      <PageHeader title="New shift" description={`At ${venueName}. Opening it creates the tip vault and a QR code.`} />
+      <Panel title="Shift details">
+        <Field label="Name" hint="For you and the staff, e.g. Friday dinner." error={labelErr}>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} />
+        </Field>
+        <Field label="Length" hint="Tipping closes after this. Nobody can claim more hours than this." error={hoursErr}>
+          <div className="input-suffix">
+            <input inputMode="decimal" value={hours} onChange={(e) => setHours(e.target.value.replace(/[^0-9.]/g, ""))} />
+            <span>hours</span>
+          </div>
+        </Field>
+      </Panel>
 
-      <div className="field-label">Team</div>
-      <table className="db edit">
-        <thead>
-          <tr>
-            <th style={{ width: "28%" }}>Name</th>
-            <th>Wallet address</th>
-            <th style={{ width: 36 }} />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              <td>
-                <input value={r.name} placeholder="Name" onChange={(e) => set(i, { name: e.target.value })} />
-              </td>
-              <td>
-                <input className="mono" value={r.wallet} placeholder="Solana address" onChange={(e) => set(i, { wallet: e.target.value })} />
-                {rowErr[i] && <em className="field-err">{rowErr[i]}</em>}
-              </td>
-              <td>
-                <button className="icon-btn" aria-label="Remove" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
-                  <Icon name="x" size={14} />
-                </button>
-              </td>
+      <Panel
+        title="Team"
+        description="Public on-chain. You can add people later but never remove anyone, and you can't add yourself."
+        actions={
+          <button className="btn tiny" onClick={() => setRows(crew.map((a) => ({ name: a.name, wallet: a.publicKey!.toBase58() })))}>
+            Use demo crew
+          </button>
+        }
+        flush
+        footer={
+          <>
+            <button className="btn" disabled={rows.length >= MAX_STAFF} onClick={() => setRows([...rows, { name: "", wallet: "" }])}>
+              <Icon name="plus" size={14} /> Add person
+            </button>
+            <span className="spacer" />
+            <a className="btn" href="#/venue">
+              Cancel
+            </a>
+            <button className="btn primary" disabled={!valid || !!pending} onClick={open}>
+              Open shift
+            </button>
+          </>
+        }
+      >
+        <table className="grid edit">
+          <thead>
+            <tr>
+              <th style={{ width: "30%" }}>Name</th>
+              <th>Wallet address</th>
+              <th style={{ width: 44 }} />
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="row gap">
-        <button className="btn ghost small" disabled={rows.length >= MAX_STAFF} onClick={() => setRows([...rows, { name: "", wallet: "" }])}>
-          <Icon name="plus" size={14} /> Add person
-        </button>
-        <button className="btn ghost small" onClick={() => setRows(crew.map((a) => ({ name: a.name, wallet: a.publicKey!.toBase58() })))}>
-          Use demo crew
-        </button>
-      </div>
-      <p className="muted small">The team list is public. You can add people later, but nobody can ever be removed.</p>
-
-      <div className="row gap end">
-        <button className="btn" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="btn primary" disabled={!valid || !!pending} onClick={open}>
-          Open shift
-        </button>
-      </div>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td>
+                  <input value={r.name} placeholder="Name" onChange={(e) => set(i, { name: e.target.value })} />
+                </td>
+                <td>
+                  <input className="mono" value={r.wallet} placeholder="Solana address" onChange={(e) => set(i, { wallet: e.target.value })} />
+                  {rowErr[i] && <em className="field-err">{rowErr[i]}</em>}
+                </td>
+                <td>
+                  <button className="icon-btn" aria-label="Remove" onClick={() => setRows(rows.filter((_, j) => j !== i))}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
     </div>
   );
 }

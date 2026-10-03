@@ -82,13 +82,11 @@ export const fromUnits = (v: BN | bigint | number) =>
     maximumFractionDigits: 2,
   });
 
+/** 0 when the token account doesn't exist; throws on RPC errors so pollers keep the last good value. */
 export async function tokenBalance(connection: Connection, account: PublicKey): Promise<bigint> {
-  try {
-    const b = await connection.getTokenAccountBalance(account);
-    return BigInt(b.value.amount);
-  } catch {
-    return 0n;
-  }
+  const info = await connection.getAccountInfo(account);
+  // SPL token account layout: amount is a u64 at byte 64.
+  return info && info.data.length >= 72 ? info.data.readBigUInt64LE(64) : 0n;
 }
 
 /** SOL and tip-token balances for many wallets in two RPC calls (public devnet RPC is rate-limited). */

@@ -102,7 +102,7 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   const keys = useMemo(loadDemoKeys, []);
   const [ownerId, setOwnerId] = useState<"wallet" | "owner">(() => {
     try {
-      return localStorage.getItem(STORE + ".active") === "owner" ? "owner" : "wallet";
+      return localStorage.getItem(STORE + ".owner") === "owner" ? "owner" : "wallet";
     } catch {
       return "wallet";
     }
@@ -117,6 +117,11 @@ export function ActorProvider({ children }: { children: ReactNode }) {
   const setActive = useCallback((id: ActorId) => {
     setActiveId(id);
     if (id === "wallet" || id === "owner") setOwnerId(id);
+    try {
+      if (id === "wallet" || id === "owner") localStorage.setItem(STORE + ".owner", id);
+    } catch {
+      /* not persisted */
+    }
     try {
       localStorage.setItem(STORE + ".active", id);
     } catch {

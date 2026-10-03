@@ -1,6 +1,6 @@
 // Small shared UI pieces: icons (Lucide-style strokes), avatars, tags, properties, callouts.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 const PATHS: Record<string, ReactNode> = {
   home: <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
@@ -92,6 +92,14 @@ const PATHS: Record<string, ReactNode> = {
   ),
   send: <path d="m22 2-7 20-4-9-9-4zM22 2 11 13" />,
   hash: <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />,
+  settings: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+    </>
+  ),
+  list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+  terminal: <path d="m4 17 6-6-6-6M12 19h8" />,
   book: (
     <>
       <path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" />
@@ -127,43 +135,131 @@ export function Spinner() {
   );
 }
 
-const AVATAR_TONES = ["blue", "green", "orange", "purple", "pink", "brown", "yellow", "red"];
-export function Avatar({ name, seed, size = 22 }: { name: string; seed?: string; size?: number }) {
-  const key = seed ?? name;
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+export function Avatar({ name, size = 22 }: { name: string; seed?: string; size?: number }) {
   return (
-    <span className={`avatar tone-${AVATAR_TONES[h % AVATAR_TONES.length]}`} style={{ width: size, height: size, fontSize: size * 0.48 }}>
+    <span className="avatar" style={{ width: size, height: size, fontSize: size * 0.46 }}>
       {(name.trim()[0] ?? "?").toUpperCase()}
     </span>
   );
 }
 
 export type Tone = "gray" | "blue" | "green" | "orange" | "red" | "yellow" | "purple";
+/** Pill badge. Green is the brand tone. */
 export const Tag = ({ tone = "gray", children }: { tone?: Tone; children: ReactNode }) => (
-  <span className={`tag tone-${tone}`}>{children}</span>
+  <span className={`badge tone-${tone}`}>{children}</span>
 );
 
-export function Properties({ children }: { children: ReactNode }) {
-  return <div className="props">{children}</div>;
-}
-export function Prop({ icon, label, children }: { icon: string; label: string; children: ReactNode }) {
+/** Page title row: title, optional badge, description and right-aligned actions. */
+export function PageHeader({
+  title,
+  badge,
+  description,
+  actions,
+}: {
+  title: ReactNode;
+  badge?: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
-    <div className="prop">
-      <div className="prop-label">
-        <Icon name={icon} size={15} />
-        {label}
+    <div className="page-header">
+      <div>
+        <div className="page-title-row">
+          <h1 className="page-title">{title}</h1>
+          {badge}
+        </div>
+        {description && <p className="page-desc">{description}</p>}
       </div>
-      <div className="prop-value">{children}</div>
+      {actions && <div className="page-actions">{actions}</div>}
     </div>
   );
 }
 
-export function Callout({ icon = "info", tone = "gray", children }: { icon?: string; tone?: Tone; children: ReactNode }) {
+/** Bordered card with a header strip, a body and an optional footer of actions. */
+export function Panel({
+  title,
+  description,
+  actions,
+  footer,
+  flush,
+  children,
+}: {
+  title?: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  footer?: ReactNode;
+  /** Body without padding, for tables and lists. */
+  flush?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className={`callout tone-${tone}`}>
-      <Icon name={icon} size={18} />
-      <div>{children}</div>
+    <section className="panel">
+      {title && (
+        <header className="panel-head">
+          <div>
+            <h2 className="panel-title">{title}</h2>
+            {description && <p className="panel-desc">{description}</p>}
+          </div>
+          {actions && <div className="panel-actions">{actions}</div>}
+        </header>
+      )}
+      <div className={flush ? "panel-body flush" : "panel-body"}>{children}</div>
+      {footer && <footer className="panel-foot">{footer}</footer>}
+    </section>
+  );
+}
+
+/** Small metric card. */
+export function Stat({ label, value, sub, icon }: { label: string; value: ReactNode; sub?: ReactNode; icon: string }) {
+  return (
+    <div className="stat">
+      <div className="stat-label">
+        <Icon name={icon} size={14} />
+        {label}
+      </div>
+      <div className="stat-value">{value}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+/** Key/value rows inside a panel. */
+export function Properties({ children }: { children: ReactNode }) {
+  return <dl className="kv">{children}</dl>;
+}
+export function Prop({ label, children }: { icon?: string; label: string; children: ReactNode }) {
+  return (
+    <div className="kv-row">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+/** Admonition box: icon, optional title, text, optional action on the right. */
+export function Callout({
+  icon = "info",
+  tone = "gray",
+  title,
+  action,
+  children,
+}: {
+  icon?: string;
+  tone?: Tone;
+  title?: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className={`alert tone-${tone}`}>
+      <span className="alert-icon">
+        <Icon name={icon} size={16} />
+      </span>
+      <div className="alert-body">
+        {title && <div className="alert-title">{title}</div>}
+        {children && <div className="alert-text">{children}</div>}
+      </div>
+      {action && <div className="alert-action">{action}</div>}
     </div>
   );
 }
@@ -174,5 +270,23 @@ export function ExtLink({ href, children }: { href: string; children: ReactNode 
       {children}
       <Icon name="external" size={12} />
     </a>
+  );
+}
+
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      className="btn tiny"
+      onClick={() =>
+        navigator.clipboard?.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1400);
+        })
+      }
+    >
+      <Icon name={copied ? "check" : "copy"} size={12} />
+      {copied ? "Copied" : label}
+    </button>
   );
 }

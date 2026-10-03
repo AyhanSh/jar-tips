@@ -3,51 +3,61 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import { useActors } from "../actors";
 import { useTx } from "../App";
 import { useInterval } from "../hooks";
-import { PROGRAM_ID, balancesOf, explorerAddr, fromUnits, short } from "../solana";
-import { Avatar, Callout, ExtLink, Icon } from "../ui";
+import { PROGRAM_ID, TIP_MINT, balancesOf, explorerAddr, fromUnits, short } from "../solana";
+import { Avatar, CopyButton, ExtLink, Icon, PageHeader, Panel, Prop, Properties } from "../ui";
+
+const STEPS = [
+  { icon: "store", title: "Owner opens a shift", text: "Lists who's working. This creates the vault, and it's the last thing the owner controls." },
+  { icon: "qr", title: "Guests tip by QR", text: "Money goes from the guest's wallet straight into the vault. No account, no app." },
+  { icon: "clock", title: "Staff enter their hours", text: "Each person sets their own hours and agrees to everyone's. Any change resets agreement." },
+  { icon: "coins", title: "Anyone pays out", text: "Majority agreed: split by hours. Nobody agreed in time: split equally." },
+];
 
 export default function Overview() {
   return (
-    <article className="doc">
-      <h1 className="title">Napiwek</h1>
-      <p className="lede">A tip jar for restaurant staff that the owner can't open.</p>
+    <div className="page">
+      <PageHeader
+        title="Overview"
+        description="A tip jar for restaurant staff that the owner can't open. Tips sit in a vault owned by a Solana program, and only the team can be paid from it."
+        actions={
+          <a className="btn primary" href="#/venue">
+            Go to venue <Icon name="chevronRight" size={14} />
+          </a>
+        }
+      />
 
-      <p>
-        Guests tip by QR into a vault that belongs to a Solana program, not to the restaurant. When the shift ends, each person
-        enters the hours they worked, and once more than half of the team agrees, anyone can pay everyone out. The owner has no
-        way to withdraw: the program simply has no instruction for it.
-      </p>
-
-      <h2>How a shift works</h2>
-      <ol className="steps">
-        <li>
-          <b>The owner opens a shift</b> and lists who's working. This creates the vault. It's the last thing the owner controls.
-        </li>
-        <li>
-          <b>Guests tip by QR.</b> The money goes from their wallet straight into the vault.
-        </li>
-        <li>
-          <b>Staff enter their own hours</b> and confirm everyone's. If anyone changes a number, all confirmations reset.
-        </li>
-        <li>
-          <b>Anyone pays out.</b> With a majority, the pot is split by hours. If nobody agrees in time, it's split equally.
-        </li>
-      </ol>
+      <div className="cards4">
+        {STEPS.map((s, i) => (
+          <div className="card" key={s.title}>
+            <div className="card-top">
+              <span className="card-icon">
+                <Icon name={s.icon} size={16} />
+              </span>
+              <span className="card-step">Step {i + 1}</span>
+            </div>
+            <h3 className="card-title">{s.title}</h3>
+            <p className="card-text">{s.text}</p>
+          </div>
+        ))}
+      </div>
 
       <DemoWallets />
 
-      <h2>Rules live on-chain</h2>
-      <p className="muted">
-        Every rule above is enforced by the program <ExtLink href={explorerAddr(PROGRAM_ID)}>{short(PROGRAM_ID, 6)}</ExtLink> on
-        Solana devnet. There is no admin key and no server.
-      </p>
-
-      <div className="row gap">
-        <a className="btn primary" href="#/venue">
-          Go to your venue <Icon name="chevronRight" size={14} />
-        </a>
-      </div>
-    </article>
+      <Panel title="Program" description="Every rule above is enforced here. No admin key, no server.">
+        <Properties>
+          <Prop label="Program ID">
+            <span className="mono">{PROGRAM_ID.toBase58()}</span>
+            <CopyButton text={PROGRAM_ID.toBase58()} />
+            <ExtLink href={explorerAddr(PROGRAM_ID)}>Explorer</ExtLink>
+          </Prop>
+          <Prop label="Network">Solana devnet</Prop>
+          <Prop label="Tip token">
+            <span className="mono">{short(TIP_MINT, 6)}</span>
+            <span className="muted">test USDC with a public faucet</span>
+          </Prop>
+        </Properties>
+      </Panel>
+    </div>
   );
 }
 
@@ -71,13 +81,26 @@ function DemoWallets() {
   const lowCrew = actors.slice(1).some((a) => bal[a.id] && bal[a.id].sol < 0.01);
 
   return (
-    <>
-      <h2>Demo wallets</h2>
-      <Callout>
-        One laptop plays every role. Your connected wallet is the owner. The other five are devnet wallets stored in this browser.
-        Pick who signs from <b>Signing as</b> in the sidebar.
-      </Callout>
-      <table className="db">
+    <Panel
+      title="Demo wallets"
+      description="One laptop plays every role. Your connected wallet is the owner; the rest live in this browser. Choose who signs from the menu in the top bar."
+      flush
+      footer={
+        <>
+          <span className="muted small">
+            {wallet.publicKey ? "Tops up any wallet under 0.01 SOL and sends the guest 200 test USDC." : "Connect a wallet first."}
+          </span>
+          <button
+            className={`btn ${lowCrew ? "primary" : ""}`}
+            disabled={!wallet.publicKey || !!pending}
+            onClick={() => run("Fund demo wallets", async () => ({ signature: await fundCrew(), failed: false }))}
+          >
+            Fund demo wallets
+          </button>
+        </>
+      }
+    >
+      <table className="grid">
         <thead>
           <tr>
             <th>Name</th>
@@ -92,7 +115,7 @@ function DemoWallets() {
             <tr key={a.id}>
               <td>
                 <span className="cell-person">
-                  <Avatar name={a.name} seed={a.id} />
+                  <Avatar name={a.name} />
                   {a.name}
                 </span>
               </td>
@@ -100,24 +123,12 @@ function DemoWallets() {
               <td className="mono">
                 {a.publicKey ? <ExtLink href={explorerAddr(a.publicKey)}>{short(a.publicKey)}</ExtLink> : <span className="muted">Not connected</span>}
               </td>
-              <td className="num">{bal[a.id] ? bal[a.id].sol.toFixed(3) : "—"}</td>
-              <td className="num">{bal[a.id] ? fromUnits(bal[a.id].usdc) : "—"}</td>
+              <td className="num mono">{bal[a.id] ? bal[a.id].sol.toFixed(3) : "—"}</td>
+              <td className="num mono">{bal[a.id] ? fromUnits(bal[a.id].usdc) : "—"}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <div className="row gap">
-        <button
-          className={`btn ${lowCrew ? "primary" : ""}`}
-          disabled={!wallet.publicKey || !!pending}
-          onClick={() => run("Fund demo wallets", async () => ({ signature: await fundCrew(), failed: false }))}
-        >
-          Fund demo wallets
-        </button>
-        <span className="muted small">
-          {wallet.publicKey ? "Sends 0.02 SOL to each demo wallet that's low, and 200 test USDC to the guest." : "Connect a wallet in the sidebar first."}
-        </span>
-      </div>
-    </>
+    </Panel>
   );
 }

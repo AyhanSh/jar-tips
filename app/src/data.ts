@@ -61,3 +61,23 @@ export function useShift(key: PublicKey | null, tick: number) {
   );
   return { shift, venue, vault };
 }
+
+const ownerCache = new Map<string, PublicKey>();
+/** The owner of a shift, fetched once, so shared chrome (breadcrumbs, menus) can show that shift's venue. */
+export function useShiftOwner(key: PublicKey | null) {
+  const program = useProgram();
+  const [owner, setOwner] = useState<PublicKey | null>(key ? (ownerCache.get(key.toBase58()) ?? null) : null);
+  useInterval(
+    async () => {
+      if (!key) return setOwner(null);
+      const cached = ownerCache.get(key.toBase58());
+      if (cached) return setOwner(cached);
+      const s = await program.account.shift.fetchNullable(key);
+      if (s) ownerCache.set(key.toBase58(), s.owner);
+      setOwner(s?.owner ?? null);
+    },
+    60000,
+    [key?.toBase58()],
+  );
+  return owner;
+}

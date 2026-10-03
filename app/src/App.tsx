@@ -1,10 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { useHashRoute } from "./hooks";
+import { useChainNow, useHashRoute } from "./hooks";
 import { useActors, type ActorId, type SendResult } from "./actors";
-import { useVenue } from "./data";
-import { useChainNow } from "./hooks";
-import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, short, statusOf } from "./solana";
+import { useShiftOwner, useVenue } from "./data";
+import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, parseKey, short, statusOf } from "./solana";
 import { Avatar, Icon, Spinner } from "./ui";
 import Overview from "./pages/Overview";
 import Venue from "./pages/Venue";
@@ -31,6 +30,13 @@ interface TxCtx {
 const Tx = createContext<TxCtx>({ run: async () => null, pending: null, tick: 0 });
 export const useTx = () => useContext(Tx);
 
+const TOAST_TITLE: Record<Toast["kind"], string> = {
+  info: "Waiting for confirmation",
+  ok: "Transaction confirmed",
+  err: "Transaction failed",
+  blocked: "Blocked by the program",
+};
+
 export default function App() {
   const [route] = useHashRoute();
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -50,17 +56,17 @@ export default function App() {
       if (busy.current) return null;
       busy.current = true;
       setPending(label);
-      push({ kind: "info", text: `${label}…` });
+      push({ kind: "info", text: label });
       try {
         const r = await fn();
-        if (!r.failed) push({ kind: "ok", text: `${label}: confirmed`, sig: r.signature });
-        else if (opts.expectFail) push({ kind: "blocked", text: `Blocked on-chain: ${r.reason}`, sig: r.signature });
-        else push({ kind: "err", text: `${label} failed: ${r.reason}`, sig: r.signature });
+        if (!r.failed) push({ kind: "ok", text: label, sig: r.signature });
+        else if (opts.expectFail) push({ kind: "blocked", text: r.reason ?? label, sig: r.signature });
+        else push({ kind: "err", text: `${label}: ${r.reason}`, sig: r.signature });
         return r;
       } catch (e) {
         console.error(e);
         const msg = errorMessage(e);
-        push({ kind: "err", text: /reject|cancel/i.test(msg) ? `${label}: cancelled in wallet` : `${label} failed: ${msg}` });
+        push({ kind: "err", text: /reject|cancel/i.test(msg) ? `${label}: cancelled in wallet` : `${label}: ${msg}` });
         return null;
       } finally {
         busy.current = false;
@@ -75,7 +81,7 @@ export default function App() {
 
   const page =
     route[0] === "venue" || route[0] === "owner" ? (
-      <Venue />
+      <Venue creating={route[1] === "new"} />
     ) : route[0] === "shift" && route[1] ? (
       <ShiftView address={route[1]} />
     ) : route[0] === "tip" && route[1] ? (
@@ -89,27 +95,27 @@ export default function App() {
       {route[0] === "tip" ? (
         <div className="guest-shell">{page}</div>
       ) : (
-        <div className={`shell ${menuOpen ? "menu-open" : ""}`}>
-          <header className="mobile-bar">
-            <button className="icon-btn" onClick={() => setMenuOpen((o) => !o)} aria-label="Menu">
-              <Icon name="menu" size={18} />
-            </button>
-            <span className="mobile-title">Napiwek</span>
-          </header>
-          <Sidebar route={route} />
-          <div className="scrim" onClick={() => setMenuOpen(false)} />
-          <main className="page">{page}</main>
+        <div className={`app ${menuOpen ? "menu-open" : ""}`}>
+          <Chrome route={route} onMenu={() => setMenuOpen((o) => !o)}>
+            <div className="scrim" onClick={() => setMenuOpen(false)} />
+            <main className="content">{page}</main>
+          </Chrome>
         </div>
       )}
 
       <div className="toasts" role="status">
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
-            {t.kind === "info" ? <Spinner /> : <Icon name={t.kind === "ok" ? "check" : t.kind === "blocked" ? "shield" : "alert"} size={15} />}
-            <span>{t.text}</span>
+            <span className="toast-icon">
+              {t.kind === "info" ? <Spinner /> : <Icon name={t.kind === "ok" ? "check" : t.kind === "blocked" ? "shield" : "alert"} size={15} />}
+            </span>
+            <div className="toast-body">
+              <div className="toast-title">{TOAST_TITLE[t.kind]}</div>
+              <div className="toast-text">{t.text}</div>
+            </div>
             {t.sig && (
-              <a href={explorerTx(t.sig)} target="_blank" rel="noreferrer">
-                View
+              <a className="btn tiny" href={explorerTx(t.sig)} target="_blank" rel="noreferrer">
+                Explorer
               </a>
             )}
           </div>
@@ -119,63 +125,124 @@ export default function App() {
   );
 }
 
-function Sidebar({ route }: { route: string[] }) {
+type Browsed = ReturnType<typeof useVenue>;
+
+/** The venue the chrome describes: the open shift's venue, else the signer-as-owner's. Fetched once for top bar and menu. */
+function Chrome({ route, onMenu, children }: { route: string[]; onMenu: () => void; children: React.ReactNode }) {
   const { owner } = useActors();
   const { tick } = useTx();
-  const now = useChainNow();
-  const { venue, shifts } = useVenue(owner.publicKey, tick, 20000);
-  const here = route.join("/");
+  const shiftOwner = useShiftOwner(route[0] === "shift" ? parseKey(route[1] ?? "") : null);
+  const browsed = useVenue(route[0] === "shift" ? shiftOwner : owner.publicKey, tick, 20000);
+  const section = route[0] === "venue" || route[0] === "owner" || route[0] === "shift" ? "venue" : "home";
+  return (
+    <>
+      <Rail section={section} />
+      <div className="main-col">
+        <TopBar route={route} onMenu={onMenu} browsed={browsed} />
+        <div className="workspace">
+          {section === "venue" && <SubMenu route={route} browsed={browsed} />}
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Narrow icon rail; expands over the page on hover to show labels. */
+function Rail({ section }: { section: "home" | "venue" }) {
+  return (
+    <nav className="rail" aria-label="Main">
+      <a className="rail-logo" href="#/" aria-label="Napiwek">
+        <span className="logo-mark">N</span>
+        <span className="rail-label logo-word">Napiwek</span>
+      </a>
+      <a className={`rail-item ${section === "home" ? "on" : ""}`} href="#/">
+        <Icon name="home" size={18} />
+        <span className="rail-label">Overview</span>
+      </a>
+      <a className={`rail-item ${section === "venue" ? "on" : ""}`} href="#/venue">
+        <Icon name="store" size={18} />
+        <span className="rail-label">Venue & shifts</span>
+      </a>
+      <div className="rail-spacer" />
+      <a className="rail-item" href={explorerAddr(PROGRAM_ID)} target="_blank" rel="noreferrer">
+        <Icon name="terminal" size={18} />
+        <span className="rail-label">Program on Explorer</span>
+      </a>
+    </nav>
+  );
+}
+
+function TopBar({ route, onMenu, browsed }: { route: string[]; onMenu: () => void; browsed: Browsed }) {
+  const { venue, shifts } = browsed;
+  const shift = route[0] === "shift" ? shifts.find((s) => s.key.toBase58() === route[1]) : undefined;
+  const crumbs: { label: string; href?: string }[] = [{ label: "Napiwek", href: "#/" }];
+  if (route[0] === "venue" || route[0] === "owner" || route[0] === "shift") crumbs.push({ label: venue?.name ?? "Venue", href: "#/venue" });
+  if (route[0] === "shift") crumbs.push({ label: shift ? shift.acc.label || `Shift ${shift.acc.index.toNumber() + 1}` : "Shift" });
+  if (route[0] === "venue" && route[1] === "new") crumbs.push({ label: "New shift" });
 
   return (
-    <aside className="sidebar">
-      <div className="workspace">
-        <span className="ws-mark">N</span>
-        <span className="ws-name">Napiwek</span>
-        <span className="ws-net">Devnet</span>
-      </div>
-
-      <nav className="nav">
-        <a className={`nav-item ${here === "" ? "on" : ""}`} href="#/">
-          <Icon name="home" /> Overview
-        </a>
-        <a className={`nav-item ${route[0] === "venue" || route[0] === "owner" ? "on" : ""}`} href="#/venue">
-          <Icon name="store" /> {venue?.name ?? "Venue"}
-        </a>
+    <header className="topbar">
+      <button className="icon-btn mobile-only" onClick={onMenu} aria-label="Menu">
+        <Icon name="menu" size={18} />
+      </button>
+      <nav className="crumbs" aria-label="Breadcrumb">
+        {crumbs.map((c, i) => (
+          <span key={i} className="crumb">
+            {i > 0 && <span className="crumb-sep">/</span>}
+            {c.href && i < crumbs.length - 1 ? <a href={c.href}>{c.label}</a> : <span className="crumb-here">{c.label}</span>}
+          </span>
+        ))}
+        <span className="badge tone-gray net-badge">devnet</span>
       </nav>
-
-      {shifts.length > 0 && (
-        <nav className="nav shifts">
-          <div className="nav-heading">Shifts</div>
-          {shifts.slice(0, 6).map(({ key, acc }) => {
-            const st = statusOf(acc, now);
-            return (
-              <a key={key.toBase58()} className={`nav-item ${here === `shift/${key.toBase58()}` ? "on" : ""}`} href={`#/shift/${key.toBase58()}`}>
-                <span className={`dot tone-${st.tone}`} title={st.label} />
-                <span className="truncate">{acc.label || `Shift ${acc.index.toNumber() + 1}`}</span>
-              </a>
-            );
-          })}
-          {shifts.length > 6 && (
-            <a className="nav-item nav-more" href="#/venue">
-              All {shifts.length} shifts
-            </a>
-          )}
-        </nav>
-      )}
-
-      <div className="sidebar-foot">
+      <div className="topbar-right">
         <SignerMenu />
         <WalletMultiButton />
-        <a className="foot-link" href={explorerAddr(PROGRAM_ID)} target="_blank" rel="noreferrer">
-          Program {short(PROGRAM_ID)}
+      </div>
+    </header>
+  );
+}
+
+/** Secondary menu for the venue section: settings plus the list of shifts. */
+function SubMenu({ route, browsed }: { route: string[]; browsed: Browsed }) {
+  const now = useChainNow();
+  const { venue, shifts } = browsed;
+  const here = route.join("/");
+  return (
+    <aside className="submenu">
+      <div className="submenu-title">{venue?.name ?? "Venue"}</div>
+      <div className="submenu-group">
+        <a className={`submenu-item ${here === "venue" || here === "owner" ? "on" : ""}`} href="#/venue">
+          <Icon name="settings" size={14} /> Venue
         </a>
+      </div>
+      <div className="submenu-group grow">
+        <div className="submenu-heading">
+          Shifts
+          {venue && (
+            <a className="icon-btn small" href="#/venue/new" aria-label="New shift" title="New shift">
+              <Icon name="plus" size={14} />
+            </a>
+          )}
+        </div>
+        {shifts.length === 0 && <div className="submenu-empty">{venue ? "No shifts yet" : "Create a venue first"}</div>}
+        {shifts.slice(0, 12).map(({ key, acc }) => {
+          const st = statusOf(acc, now);
+          return (
+            <a key={key.toBase58()} className={`submenu-item ${here === `shift/${key.toBase58()}` ? "on" : ""}`} href={`#/shift/${key.toBase58()}`}>
+              <span className={`dot tone-${st.tone}`} title={st.label} />
+              <span className="truncate">{acc.label || `Shift ${acc.index.toNumber() + 1}`}</span>
+              <span className="submenu-meta">#{acc.index.toNumber() + 1}</span>
+            </a>
+          );
+        })}
       </div>
     </aside>
   );
 }
 
-/** Who signs the next transaction. A dropdown like a workspace/account switcher. */
-export function SignerMenu({ only }: { only?: ActorId[] }) {
+/** Who signs the next transaction. */
+export function SignerMenu({ only, up }: { only?: ActorId[]; up?: boolean }) {
   const { actors, active, setActive } = useActors();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -188,17 +255,15 @@ export function SignerMenu({ only }: { only?: ActorId[] }) {
 
   return (
     <div className="signer" ref={ref}>
-      <div className="signer-label">Signing as</div>
-      <button className="signer-btn" onClick={() => setOpen((o) => !o)}>
-        <Avatar name={active.name} seed={active.id} />
-        <span className="signer-text">
-          <span className="signer-name">{active.name}</span>
-          <span className="signer-role">{active.role}</span>
-        </span>
-        <Icon name="chevronDown" size={14} />
+      <button className="signer-btn" onClick={() => setOpen((o) => !o)} title="Who signs the next transaction">
+        <Avatar name={active.name} size={20} />
+        <span className="signer-name">{active.name}</span>
+        <span className="signer-role">{active.role}</span>
+        <Icon name="chevronDown" size={13} />
       </button>
       {open && (
-        <div className="menu">
+        <div className={`menu ${up ? "up" : ""}`}>
+          <div className="menu-label">Sign transactions as</div>
           {list.map((a) => (
             <button
               key={a.id}
@@ -209,10 +274,10 @@ export function SignerMenu({ only }: { only?: ActorId[] }) {
                 setOpen(false);
               }}
             >
-              <Avatar name={a.name} seed={a.id} />
-              <span className="signer-text">
-                <span className="signer-name">{a.name}</span>
-                <span className="signer-role">{a.publicKey ? `${a.role} · ${short(a.publicKey)}` : "Connect a wallet first"}</span>
+              <Avatar name={a.name} size={22} />
+              <span className="menu-text">
+                <span className="menu-name">{a.name}</span>
+                <span className="menu-sub">{a.publicKey ? `${a.role} · ${short(a.publicKey)}` : "Connect a wallet first"}</span>
               </span>
               {a.id === active.id && <Icon name="check" size={14} />}
             </button>
