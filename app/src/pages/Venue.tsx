@@ -11,18 +11,16 @@ import {
   MAX_STAFF,
   MAX_STAFF_NAME_BYTES,
   byteLen,
-  explorerAddr,
   fromUnits,
   ixCreateVenue,
   ixOpenShift,
   parseKey,
-  short,
   stageOf,
   statusOf,
   txOf,
   type VenueAccount,
 } from "../solana";
-import { Avatar, Callout, ExtLink, Icon, Tag } from "../ui";
+import { Avatar, Callout, Icon, Tag } from "../ui";
 import { Journey, NextStep, RoleTag } from "../journey";
 import { ART } from "../art";
 
@@ -31,7 +29,6 @@ const WINDOWS = [
   { secs: 3600, label: "1 hour" },
   { secs: 86400, label: "24 hours" },
 ];
-const windowLabel = (s: number) => WINDOWS.find((w) => w.secs === s)?.label ?? `${s} seconds`;
 const shiftName = (r: ShiftRow) => r.acc.label || `Shift ${r.acc.index.toNumber() + 1}`;
 
 export default function Venue({ creating }: { creating: boolean }) {
@@ -251,44 +248,6 @@ function VenueHome({ venue, shifts, owner }: { venue: VenueAccount; shifts: Shif
         </section>
       )}
 
-      <section>
-        <h2 className="section-title">Rules of this venue</h2>
-        <div className="rule-tiles">
-          <div className="rule-tile">
-            <Icon name="coins" size={18} />
-            <b>Tips in USDC</b>
-            <span>devnet test token</span>
-          </div>
-          <div className="rule-tile">
-            <Icon name="clock" size={18} />
-            <b>{windowLabel(venue.confirmWindow.toNumber())}</b>
-            <span>to agree, then equal split</span>
-          </div>
-          <div className="rule-tile no">
-            <Icon name="lock" size={18} />
-            <b>Owner can't withdraw</b>
-            <span>no such instruction exists</span>
-          </div>
-          <div className="rule-tile">
-            <Icon name="users" size={18} />
-            <b>Team is add-only</b>
-            <span>nobody can be removed</span>
-          </div>
-        </div>
-        <div className="rights">
-          <RoleTag role="owner" />
-          <span className="chip yes"><Icon name="check" size={12} /> Open shifts</span>
-          <span className="chip yes"><Icon name="check" size={12} /> Add staff</span>
-          <span className="chip yes"><Icon name="check" size={12} /> End early</span>
-          <span className="chip no"><Icon name="x" size={12} /> Withdraw</span>
-          <span className="chip no"><Icon name="x" size={12} /> Edit hours</span>
-          <span className="chip no"><Icon name="x" size={12} /> Remove staff</span>
-          <span className="spacer" />
-          <ExtLink href={explorerAddr(venue.owner)}>
-            <span className="mono small">{short(venue.owner, 6)}</span>
-          </ExtLink>
-        </div>
-      </section>
     </div>
   );
 }
