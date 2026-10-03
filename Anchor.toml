@@ -1,0 +1,20 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+napiwek = "APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X"
+
+[programs.devnet]
+napiwek = "APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]
