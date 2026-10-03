@@ -7,9 +7,25 @@ When the shift ends, each staff member enters their own hours; once **more than 
 "Pay out" and the program splits the pot pro-rata, straight into each person's wallet. If the staff can't agree in time, the
 program splits it equally. **The owner has no withdraw permission at all, because the program has no withdraw instruction.**
 
+- **Live app:** https://jar-tips.vercel.app
 - **Program (devnet):** [`APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X`](https://explorer.solana.com/address/APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X?cluster=devnet) (on-chain name `napiwek`, Polish for "tip")
 - **Stack:** Anchor 1.x (Rust) · SPL Token / Token-2022 via `token_interface` · React + Vite · Wallet Adapter (Wallet Standard) · `@anchor-lang/core`
 - **Target user:** waiters, bartenders and runners in Polish restaurants and bars where tips arrive by card or QR and are pooled per shift, typically a 5–15-person team whose card tips currently land in the owner's merchant account.
+
+## For judges: try it in 2 minutes
+
+**On a laptop**
+1. Open https://jar-tips.vercel.app. The **guide** starts by itself: the page dims and lights up the next thing to click. Reopen it any time with **Guide** in the top bar.
+2. Connect Phantom or Solflare **on devnet** (Settings → Developer settings → Testnet mode → Solana Devnet). No wallet? Pick **Demo owner** in the signer menu at the top right.
+3. Follow the guide: open a shift → tip → try to steal as the owner (both attempts fail on-chain) → staff enter hours and agree → anyone presses **Pay out**.
+4. Every notification has an **Explorer** button that opens the transaction on Solana Explorer.
+
+**On a phone**
+1. On a shift page, press **Show QR** and scan it.
+2. Tap **Open in Phantom** (wallet on devnet), then **get 50 test USDC**, then **Tip**.
+3. If the wallet has no devnet SOL for fees, the page links to the free faucet.
+
+**What to look at:** `settle` in [lib.rs:186](programs/napiwek/src/lib.rs#L186) is the only way money leaves a vault, and the program has no withdraw instruction.
 
 ---
 
@@ -134,7 +150,7 @@ Prerequisites: Node 20+, a devnet wallet with ~0.2 SOL. Program build/deploy nee
 ```bash
 cd app
 npm install
-cp .env.example .env.local   # strongly recommended: a free Helius/QuickNode devnet RPC (public RPC rate-limits)
+cp .env.example .env.local   # optional: a private devnet RPC, and VITE_PUBLIC_URL for QR codes
 npm run dev                  # http://localhost:5174
 ```
 

@@ -1,6 +1,8 @@
 # Jar: 3-minute video script + live demo checklist
 
 ## Before you record / go live
+- [ ] Present from https://jar-tips.vercel.app (or localhost with `VITE_PUBLIC_URL=https://jar-tips.vercel.app` in `app/.env.local`, so the QR opens the live site on phones).
+- [ ] Phone ready: Phantom on devnet with a little devnet SOL, to scan **Show QR** and tip live.
 - [ ] `app/.env.local` has a private devnet RPC (`VITE_RPC_URL=…`). The public RPC returns HTTP 429 under demo load.
 - [ ] Phantom on **devnet**, owner wallet with ≥ 0.2 SOL. Overview → **Fund demo wallets** done (Ana/Ben/Kasia/Guest have SOL, Guest has USDC).
   No browser wallet? `npx tsx scripts/fund.ts <addresses…>` and sign as Demo owner.

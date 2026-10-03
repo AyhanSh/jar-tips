@@ -28,7 +28,8 @@ Jar moves the money out of the owner's hands and into a Solana program:
 - **Why blockchain:** custody without a custodian, a publicly verifiable history of every tip and payout, and enforcement before the fact instead of a lawsuit after it, for about $0.001 per tip.
 
 ## Links
-- Repo: [github.com/__/napiwek]
+- Live app: https://jar-tips.vercel.app
+- Repo: https://github.com/AyhanSh/jar-tips
 - Video (≤ 3 min): [link]
 - Slides (PDF, 10 slides): [link]
 - Program (devnet): https://explorer.solana.com/address/APy9737Fhn6SsFCyXeMyHC5hNoagbRMnGp89W3LPH91X?cluster=devnet
