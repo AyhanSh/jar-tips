@@ -6,6 +6,3 @@ node_modules
 test-ledger
 .yarn
 .surfpool
-
-# local editor/tooling config
-.claude/
