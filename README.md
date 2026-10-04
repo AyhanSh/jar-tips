@@ -1,52 +1,127 @@
-# 🫙 Jar: tips with no middleman
+<p align="center">
+  <img src="docs/images/cover.jpg" alt="Jar: tips that go straight to the team" width="100%">
+</p>
 
-**Superteam Poland · Finance Without Intermediaries**
+<p align="center">
+  <b>A tip jar for restaurant staff that nobody owns.</b><br>
+  Guests tip by QR into a vault that only a Solana program controls.<br>
+  The staff split it by hours. Nobody in between can touch it, not even the restaurant.
+</p>
 
-**Jar** is a tip jar for restaurant staff with **no owner in it at all**. Guests tip by QR code into a **shift vault controlled only by a
-Solana program**. The restaurant never touches the money and has no account, key or role in the program. The team runs the jar itself:
-a waiter starts it with their coworkers, **adding or removing anyone needs a majority vote**, and any team member can open a shift. When
-the shift ends, each person enters their own hours. Once **more than half of the shift agrees**, anyone can press "Pay out" and the program
-splits the pot pro-rata, straight into each person's wallet. If they can't agree in time, the program splits it equally.
+<p align="center">
+  <a href="https://jar-tips.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/Live_demo-jar--tips.vercel.app-3ecf8e?style=for-the-badge"></a>
+  <a href="https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet"><img alt="Solana devnet" src="https://img.shields.io/badge/Solana-devnet-9945FF?style=for-the-badge&logo=solana&logoColor=white"></a>
+  <a href="https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet"><img alt="Program is immutable" src="https://img.shields.io/badge/Program-immutable-171717?style=for-the-badge"></a>
+</p>
 
-- **Live app:** https://jar-tips.vercel.app
-- **Program (devnet):** [`HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD`](https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet) (on-chain name `napiwek`, Polish for "tip")
-- **Stack:** Anchor 1.x (Rust) · SPL Token / Token-2022 via `token_interface` · React + Vite · Wallet Adapter (Wallet Standard) · `@anchor-lang/core`
-- **Target user:** waiters, bartenders and runners in Polish restaurants and bars where tips arrive by card or QR and are pooled per shift, typically a 5–12-person team whose card tips currently land in the owner's merchant account.
+<p align="center"><sub>Superteam Poland · Finance Without Intermediaries</sub></p>
 
-## For judges: try it in 2 minutes
+---
 
-**On a laptop**
-1. Open https://jar-tips.vercel.app. The **guide** starts by itself: the page dims and lights up the next thing to click. Reopen it any time with **Guide** in the top bar.
-2. **No wallet needed:** on the Overview press **Fund** (free devnet SOL and test USDC), then **Start → Play as Ana**. Ana is a waiter; Ben, Kasia and a guest are also on this laptop. Prefer your own wallet? Connect Phantom or Solflare **on devnet** and you join the team as one more coworker.
-3. **Start team**, then try the vote: **Propose someone** (use *Test address*) and press **Ben approves**: 2 of 3 votes adds them.
-4. **New shift** → pick who's working → **Open shift as Ana**. On the shift page every button names who it acts as (**Save as Ana**, **Ben agrees**, **Pay out now**). In **Try to cheat**, play the restaurant: withdraw, redirect a share, join the shift. All three fail on-chain.
-5. Every notification has an **Explorer** button that opens the transaction on Solana Explorer.
+## The idea in one picture
 
-**On a phone**
-1. On a shift page, press **Show QR** and scan it.
-2. Tap **Open in Phantom** (wallet on devnet), then **get 50 test USDC**, then **Tip**.
-3. If the wallet has no devnet SOL for fees, the page links to the free faucet.
+<table>
+  <tr>
+    <th width="50%">Today</th>
+    <th width="50%">With Jar</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/before-owner.png" alt="The owner holding the tip jar" width="200"></td>
+    <td align="center"><img src="docs/images/after-waiter.png" alt="A happy waiter holding the tips" width="200"></td>
+  </tr>
+  <tr>
+    <td>Card and QR tips land in the <b>owner's account</b>, mixed with the bill. Staff can't see the total and have to trust the owner with the split, the timing and the "fees".</td>
+    <td>Tips land in a <b>vault only code controls</b>. Everyone sees every tip, the staff agree on their hours, and the money goes <b>straight to their wallets</b>.</td>
+  </tr>
+</table>
 
-**What to look at:** `settle` in [lib.rs:263](programs/napiwek/src/lib.rs#L263) is the only way money leaves a vault. The program has no withdraw instruction, no admin key and no owner field.
+## The problem
+
+<p align="center"><img src="docs/images/problem.jpg" alt="Guest tips by card or QR, the owner's account holds every tip, staff wonder: fair split? when? minus fees?" width="100%"></p>
+
+When a guest tips by card or QR, the tip doesn't reach the waiter. It settles into the restaurant's merchant account, and staff depend on
+the owner to pass it on. Skimming is common enough that the **UK passed a law in October 2024** making employers pass on 100% of tips.
+But a law still needs an inspector and a tribunal. Jar makes skimming impossible instead of illegal.
+
+## How it works
+
+<table>
+  <tr>
+    <td align="center" width="20%"><img src="app/public/icons/team.png" alt="" width="72"><br><b>1. Start a team</b><br><sub>A waiter adds their coworkers. Nobody gets special rights; team changes need a majority vote.</sub></td>
+    <td align="center" width="20%"><img src="app/public/icons/jar.png" alt="" width="72"><br><b>2. Open a shift</b><br><sub>Any team member can. The program creates a vault with no private key.</sub></td>
+    <td align="center" width="20%"><img src="app/public/icons/phone.png" alt="" width="72"><br><b>3. Guests tip</b><br><sub>Scan the QR, tap 5, 10 or 20 USDC. It goes straight into the vault.</sub></td>
+    <td align="center" width="20%"><img src="app/public/icons/clock.png" alt="" width="72"><br><b>4. Agree on hours</b><br><sub>Everyone enters their own hours. More than half must agree.</sub></td>
+    <td align="center" width="20%"><img src="app/public/icons/split.png" alt="" width="72"><br><b>5. Pay out</b><br><sub>Anyone presses it. The program pays each person by their hours.</sub></td>
+  </tr>
+</table>
+
+The restaurant has **no account, no key and no role** in the program. There is **no withdraw button**, for anyone. If the team can't
+agree in time, anyone can trigger an **equal split**, so nobody can hold the money hostage.
+
+## See it
+
+<p align="center"><img src="docs/images/app-shift.jpg" alt="The shift page on a laptop: money in the vault, agreement, time left, and the four steps" width="100%"></p>
+
+<table>
+  <tr>
+    <td align="center" width="50%"><img src="docs/images/phone-tip.jpg" alt="Guest tip page on a phone" width="280"><br><sub><b>The guest's view.</b> Scan the QR, pick an amount, tip.</sub></td>
+    <td align="center" width="50%"><img src="docs/images/phone-shift.jpg" alt="Shift page on a phone" width="280"><br><sub><b>The staff's view.</b> The vault, the vote and the payout.</sub></td>
+  </tr>
+</table>
+
+## Try it in 2 minutes
+
+<p align="center"><img src="docs/images/app-overview.jpg" alt="The overview page with Guide me, Fund and Start" width="100%"></p>
+
+**On a laptop, no wallet needed**
+1. Open **https://jar-tips.vercel.app**. A short guide starts by itself and lights up what to click next. Reopen it with **Guide** in the top bar.
+2. Press **Fund** to get free devnet SOL and test USDC, then **Start → Play as Ana**. Ana is a waiter; Ben, Kasia and a guest live on the same laptop.
+3. **Start team**, then **Propose someone** (use *Test address*) and press **Ben approves**: 2 of 3 votes adds them.
+4. **New shift → Open shift as Ana**. Every button says who it acts as: **Tip as Guest**, **Save as Ana**, **Ben agrees**, **Pay out now**.
+5. Open the **Try to cheat** tab and play the restaurant: withdraw the tips, redirect a share, join the shift. **All three fail on-chain.**
+6. Every notification has an **Explorer** button that opens the real transaction.
+
+Prefer your own wallet? Connect Phantom or Solflare **on devnet** and you join as one more coworker.
+
+**On a phone:** on a shift page press **Show QR** and scan it, tap **Open in Phantom** (on devnet), **get 50 test USDC**, then **Tip**.
+
+## Why you can trust it
+
+| Question | Answer | Where in the code |
+|---|---|---|
+| Can the restaurant take the tips? | No. It has no account in the program, and the vault's only signer is a program address with no private key. | [lib.rs:518](programs/napiwek/src/lib.rs#L518) |
+| Can *anyone* withdraw? | No. There is no withdraw instruction. The only way out is `settle`, and it can only pay the shift's staff. | [lib.rs:263](programs/napiwek/src/lib.rs#L263) |
+| Can the person who started the team take over? | No. Their vote counts once. Adding or removing anyone needs more than half the team. | [lib.rs:79](programs/napiwek/src/lib.rs#L79), [lib.rs:417](programs/napiwek/src/lib.rs#L417) |
+| Can someone redirect a share to themselves? | No. `settle` checks every payout account belongs to the person at that position, whoever calls it. | [lib.rs:285](programs/napiwek/src/lib.rs#L285) |
+| Can someone fake their hours? | Not alone. More than half the shift must confirm the exact numbers; any edit voids earlier confirmations. | [lib.rs:246](programs/napiwek/src/lib.rs#L246), [lib.rs:291](programs/napiwek/src/lib.rs#L291) |
+| What if nobody agrees, or people vanish? | After the confirm window, anyone can trigger an equal split. The money is never stuck. | [lib.rs:273](programs/napiwek/src/lib.rs#L273) |
+| Can the rules be changed later? | No. The program is immutable: Explorer shows **Upgradeable: No**. No admin key, no pause, no fee switch. | [Explorer](https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet) |
+
+<p align="center">
+  <img src="docs/images/explorer-immutable.png" alt="Solana Explorer showing the program: Executable Yes, Upgradeable No" width="480"><br>
+  <sub>Solana Explorer: the program can't be upgraded, so nobody can change the rules, including us.</sub>
+</p>
+
+In the demo, the restaurant tries three attacks and every transaction **lands on devnet and fails**:
+
+1. A direct token transfer out of the vault → `owner does not match`
+2. A real payout with Ana's share swapped for its own account → `WrongPayoutAccount`
+3. Adding itself to the shift → `NotMember`
+
+## Why Solana, not a database?
+
+- **Custody without a custodian.** A database needs an operator, and whoever runs it can move the money. Here the money sits in an account only the program can sign for.
+- **Anyone can check.** Every tip, vote, hours entry and payout is a public transaction. A waiter can verify the shift total on Explorer without trusting anyone.
+- **Enforced before, not after.** A law needs a tribunal. The program rejects the bad transaction before it happens.
+- **Cheap and fast.** A tip confirms in seconds for about $0.001 in fees.
 
 ---
 
 ## Design rationale
 
-### Which relationship?
-A guest wants to thank the people who served them. Cash went straight into the waiter's hand. Card and QR tips don't: they're part of
-the bill payment, so they settle into the **restaurant's** merchant account, together with the revenue. From there, staff depend on the owner
-to pass the money on, on time, split fairly. They have no way to check how much was tipped on their shift.
-
-### Who was the middleman?
-The **owner**, with the card acquirer underneath them. The owner holds the tip money and decides who is in the pool, the split, the timing and the
-deductions ("card fees", "breakages", "the house share"). Skimming is common enough that the **UK passed the Employment (Allocation of
-Tips) Act**, in force since **1 October 2024**, which makes employers pass on 100% of tips. In the US the FLSA bans employers from keeping
-tips. Both laws exist because staff can't verify what happens to the money. A law still needs an inspector and a lawsuit. Code doesn't.
-
-### What changes? The owner is gone
-Our first version still had an owner who couldn't touch the money but did decide the roster, and so could slip in a fake waiter. This version
-removes that role completely. Every job the owner did is now done by the program or by the team itself:
+**Relationship:** guest → staff, today routed through the employer.
+**Middleman:** the restaurant owner (with the card acquirer underneath), who holds the tips and decides who's in the pool, the split, the timing and the deductions.
+**What changes:** every job the owner did now lives in the program or with the team.
 
 | What the owner used to control | Where it lives now |
 |---|---|
@@ -59,21 +134,24 @@ removes that role completely. Every job the owner did is now done by the program
 | Redirecting a share | `settle` checks that every payout account belongs to the person at that position, whoever calls it ([lib.rs:285](programs/napiwek/src/lib.rs#L285)) |
 | Deciding when people get paid | `settle` is callable by **anyone** once the rules are met: a waiter, a guest, a bot |
 
-The person who starts the team only pays ~0.007 SOL of rent for the account. They get **no extra rights**: their vote counts once, and
-the team can vote them out like anyone else.
+Our first version still had an owner who couldn't touch the money but did decide the roster, and so could slip in a fake waiter. This
+version removes that role completely. The person who starts the team only pays ~0.007 SOL of account rent and gets no extra rights.
 
-### The moment the intermediary disappears
-[`settle` in lib.rs:263](programs/napiwek/src/lib.rs#L263). The transfer authority is `ctx.accounts.shift`, a PDA signed with program
-seeds. The destinations come from the roster stored on-chain, and the amounts from `split()`. Nothing in that function reads anyone's signature
-as permission. In the demo, the restaurant (an outsider keypair) tries three times and every transaction **lands on devnet and fails**:
+**The moment the intermediary disappears:** [`settle` in lib.rs:263](programs/napiwek/src/lib.rs#L263). The transfer authority is the
+shift PDA, signed with program seeds. The destinations come from the roster stored on-chain, and the amounts from `split()`. Nothing in that
+function reads anyone's signature as permission.
 
-1. A direct SPL `TransferChecked` out of the vault → `Token program: owner does not match`
-2. A real `settle` call with Ana's payout swapped for its own account → `WrongPayoutAccount`
-3. `join_shift` to get on the roster → `NotMember`
+## Honest limitations
 
----
+- **Whoever starts the team picks its first members.** That's the one moment of trust: the founder could list a fake coworker. It's public, the real coworkers see it before working a shift, and they can vote the fake out once they're a majority. Real identity (a code from the staff room, or a payroll attestation) is on the roadmap.
+- **Majority rule is only as honest as the majority.** If most of a team colludes, they can outvote the rest. Hours are peer-checked and the fallback is an equal split, so inflating your own hours doesn't pay.
+- **Names are on-chain.** First names or nicknames only, max 16 bytes.
+- **Pooled tips only.** A QR tips the whole shift, not one waiter. Per-waiter tips are a planned extension.
+- **The demo funding key is public.** `app/src/sponsor-keypair.json` is a devnet-only "gas station" so judges can play without a wallet. Like the test-USDC faucet key, it's public on purpose and controls nothing in the program.
+- **Off-ramp.** Staff receive USDC; turning it into złoty is a separate step (an exchange or a stablecoin card). The demo uses devnet test USDC.
 
-## Rules (who can do what)
+<details>
+<summary><b>Rules: who can do what</b></summary>
 
 | Who | Can | Cannot |
 |---|---|---|
@@ -91,7 +169,10 @@ with `StaleVersion` if the numbers changed after you looked, so nobody can be tr
 **The split.** Majority confirmed → pro-rata by minutes. Rounding dust goes to the longest shift so the vault ends at exactly zero, and it is
 then closed so no late tip can get stuck. The rule is mirrored in the UI's live preview (`app/src/solana.ts`).
 
-## What happens if someone vanishes halfway?
+</details>
+
+<details>
+<summary><b>What happens if someone vanishes halfway?</b></summary>
 
 | Situation | Where the money is | What happens |
 |---|---|---|
@@ -104,40 +185,21 @@ then closed so no late tip can get stuck. The rule is mirrored in the UI's live 
 | A guest tips after payout | Their own wallet | The vault was closed in `settle`, so the transfer fails instead of stranding funds. |
 | Someone pre-creates the next vault address to block a shift | — | `open_shift` uses `init_if_needed` and only accepts the shift's own token account; anything already in it is shared like a tip. |
 
-## Can anything be changed after deploy?
+</details>
+
+<details>
+<summary><b>Can anything be changed after deploy?</b></summary>
+
 - **Per shift:** no. Mint, roster (add-only, team members only), shift length, confirm window and the split rule are fixed when the shift opens.
 - **Per team:** only membership, and only by majority vote. Mint and confirm window are fixed when the team starts.
-- **The program:** right now it's upgradeable by the deployer key `5S94…fXe` (to fix bugs during the hackathon). Before judging it will be made **immutable**:
-  ```bash
-  solana program set-upgrade-authority HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD --final
-  ```
-  After that, nobody can change the rules, including us. You can verify the upgrade authority on Explorer.
+- **The program:** no. Its upgrade authority was removed with `solana program set-upgrade-authority … --final`, so nobody can change the
+  rules, including us. Solana Explorer shows **Upgradeable: No**.
 - **No admin key, no pause, no fee switch** exists in the code.
 
-## Why blockchain and not a database?
-A tip-splitting app on a database (several exist) still has an operator who holds the money and can change the numbers. The owner can
-"fix" a row, and staff can't prove otherwise. Here:
-- **Custody:** the money sits in an account that only the program can sign for. There is no company holding it and no bank account to freeze.
-- **Verifiability:** every tip, every vote, every hours entry, every confirmation and every payout is a public transaction. A waiter can check the shift total
-  with a block explorer, without trusting the restaurant or us.
-- **Enforcement without courts:** the UK law above needs a tribunal to enforce it. A program rejects the bad transaction before it happens.
-- **Cost:** a tip settles for about $0.001 in fees. Card tips often have processing fees deducted before staff ever see them.
+</details>
 
-## Honest limitations
-- **Who starts the team picks its first members.** That's the one moment of trust: the founder could list a fake coworker. It's public,
-  the real coworkers see it before working a single shift, and they can vote the fake out as soon as they're a majority. Real identity
-  (a venue code printed in the staff room, or a payroll attestation) is on the roadmap.
-- **Majority rule is only as honest as the majority.** If most of a team colludes, they can outvote the rest. Hours are peer-checked, and the
-  fallback is an equal split, so inflating your own hours doesn't pay.
-- **Hours are self-reported**, checked by peers. A greedy waiter can inflate theirs, but the majority won't confirm.
-- **Names are on-chain.** First names or nicknames only, max 16 bytes.
-- **Pooled tips only.** A QR tips the whole shift, not one waiter. Personal tips (per-waiter QR, 100% to that person) are a planned extension.
-- **Demo funding key is public.** `app/src/sponsor-keypair.json` is a devnet-only "gas station" with a little devnet SOL, so judges can play without a wallet. Like the test-USDC faucet key, it's public on purpose and controls nothing in the program.
-- **Off-ramp.** Staff receive USDC; turning it into złoty is a separate step (exchange, or a stablecoin card). The demo uses a devnet test USDC with a public faucet.
-
----
-
-## Demo (live, devnet)
+<details>
+<summary><b>Full demo script (live, devnet)</b></summary>
 
 **One laptop plays every role.** Ana, Ben, Kasia, a guest and "the restaurant" (an outsider with no rights) are devnet keypairs kept in the
 browser; a connected Phantom/Solflare wallet can join the team too. Buttons name who they act as, and the top bar switches who signs.
@@ -154,10 +216,13 @@ The program can't tell them apart from Phantom.
 
 Variant: skip step 7's confirmations, wait out the 1-minute window and show the equal-split fallback.
 
-### Verified transactions (devnet)
-From the end-to-end script (`app/scripts/e2e-devnet.ts`): team vote to add and remove a coworker, four outsider attacks rejected, 65 USDC tipped, 8 h / 6 h / 4 h.
+The end-to-end script (`app/scripts/e2e-devnet.ts`) runs the same flow against devnet: a team vote to add and remove a coworker, four outsider
+attacks rejected, 65 USDC tipped, 8 h / 6 h / 4 h.
 
-## Run it
+</details>
+
+<details>
+<summary><b>Run it locally</b></summary>
 
 Prerequisites: Node 20+, a devnet wallet with ~0.2 SOL. Program build/deploy needs Rust 1.89, Agave 3.x, Anchor CLI 1.x.
 
@@ -185,16 +250,20 @@ solana airdrop 10 -u localhost
 cd app && RPC_URL=http://127.0.0.1:8899 npx tsx scripts/e2e-devnet.ts
 ```
 
-Rebuild and deploy the program:
+Build the program and run its tests:
 
 ```bash
 anchor build
 cargo test -p napiwek                    # split() and majority maths
-solana program deploy target/deploy/napiwek.so --program-id target/deploy/napiwek-keypair.json -u devnet
 cp target/idl/napiwek.json target/types/napiwek.ts app/src/idl/
 ```
 
-## Repo map
+The devnet program is immutable, so a changed program has to be deployed under a new program ID.
+
+</details>
+
+<details>
+<summary><b>Repo map</b></summary>
 
 ```
 programs/napiwek/src/lib.rs   the whole program: instructions, accounts, split(), votes, errors
@@ -211,10 +280,21 @@ app/public/icons/             3D illustrations, generated with Higgsfield (GPT I
 app/scripts/e2e-devnet.ts     full flow incl. votes and outsider attacks
 app/scripts/fund.ts           fund any wallets with devnet SOL + test USDC
 app/scripts/check-tx-size.mts proves a 12-person team's transactions fit Solana's 1232-byte limit
+docs/                         submission text, demo checklist, README images
 ```
 
+</details>
+
 ## From demo to product
+
 - **Who pays:** teams or venues pay a small monthly fee for the app. Never a cut of tips.
 - **POS integration:** print the shift QR on the receipt; accept card tips through an on-ramp that settles into the vault as USDC.
 - **Staff identity:** join a team with a one-time code from the staff room, so the founder can't invent people; payroll export for tax reporting.
 - **Points / roles:** weighted shares (e.g. kitchen 0.5×) voted on by the team and fixed at shift open, visible to everyone before the shift starts.
+
+---
+
+<p align="center">
+  <b>Stack:</b> Anchor 1.x (Rust) · SPL Token / Token-2022 via <code>token_interface</code> · React + Vite · Wallet Adapter (Wallet Standard)<br>
+  <b>Program (devnet):</b> <a href="https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet"><code>HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD</code></a> · on-chain name <code>napiwek</code>, Polish for "tip"
+</p>

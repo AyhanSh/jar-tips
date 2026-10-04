@@ -7,7 +7,7 @@
 - [ ] Overview → **Fund** done (Ana/Ben/Kasia/Guest have SOL, Guest has USDC). No sponsor SOL left? `npx tsx scripts/fund.ts <addresses…>`.
 - [ ] Team already started as **Ana** with the **1 minute** confirm window, so you don't burn demo time on it.
 - [ ] Two tabs ready: the app, and Solana Explorer (devnet).
-- [ ] Program made immutable (`solana program set-upgrade-authority HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD --final`), then show "Upgradeable: No" on Explorer.
+- [x] Program made immutable (`solana program set-upgrade-authority HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD --final`). Show "Upgradeable: No" on Explorer.
 
 ## Script (≈ 2:55)
 
