@@ -63,6 +63,12 @@ const PAD = 8;
 /** The arrow bounces toward the target. */
 const nudge = (x: number, y: number) => ({ "--nx": `${x}px`, "--ny": `${y}px` }) as React.CSSProperties;
 const CARD_W = 330;
+/** Below this width the card docks to the bottom of the screen instead of floating by the target. */
+const PHONE = 560;
+/** Docked card's distance from the bottom: clears the "Guide demo" ribbon below it. */
+const DOCK = 46;
+/** Off-canvas, like the nav rail on phones: there is nothing to light up, but Next can still press it. */
+const offscreen = (r: DOMRect) => r.right <= 0 || r.left >= window.innerWidth;
 
 export function Tour({ onClose }: { onClose: () => void }) {
   const [i, setI] = useState(0);
@@ -110,7 +116,8 @@ export function Tour({ onClose }: { onClose: () => void }) {
       const el = document.querySelector(step.target!);
       if (visible(el)) {
         elRef.current = el;
-        el!.scrollIntoView({ block: "center", behavior: "smooth" });
+        if (!offscreen(el!.getBoundingClientRect()))
+          el!.scrollIntoView({ block: window.innerWidth < PHONE ? "start" : "center", behavior: "smooth" });
         track();
       } else if (Date.now() - started > (step.wait ?? 4000)) {
         if (step.optional) setI((n) => Math.min(n + dir.current, STEPS.length - 1));
@@ -154,7 +161,8 @@ export function Tour({ onClose }: { onClose: () => void }) {
 
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const centered = !step.target || missing || !rect;
+  const phone = vw < PHONE;
+  const centered = !step.target || missing || !rect || offscreen(rect);
   const searching = !!step.target && !rect && !missing;
 
   // Place the card below, above, right or left of the target, whichever fits.
@@ -168,7 +176,18 @@ export function Tour({ onClose }: { onClose: () => void }) {
     const clampY = (y: number) => Math.max(12, Math.min(y, vh - cardH - 12));
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    if (rect.bottom + gap + cardH < vh) {
+    if (phone) {
+      // The target is scrolled to the top and the card docks at the bottom. A target that can't scroll
+      // up (the end of the page) would sit under it, so then the card docks at the top instead.
+      const under = rect.bottom + PAD > vh - DOCK - cardH;
+      if (under && rect.top - PAD > cardH + 24) {
+        card = { left: 12, right: 12, top: 12 };
+        if (rect.top - gap > 12 + cardH) arrow = { icon: "arrowDown", style: { top: rect.top - 40, left: cx - 14, ...nudge(0, 6) } };
+      } else {
+        card = { left: 12, right: 12, bottom: DOCK };
+        if (rect.bottom + gap < vh - DOCK - cardH) arrow = { icon: "arrowUp", style: { top: rect.bottom + 12, left: cx - 14, ...nudge(0, -6) } };
+      }
+    } else if (rect.bottom + gap + cardH < vh) {
       card = { top: rect.bottom + gap, left: clampX(cx - CARD_W / 2) };
       arrow = { icon: "arrowUp", style: { top: rect.bottom + 12, left: cx - 14, ...nudge(0, -6) } };
     } else if (rect.top - gap - cardH > 0) {
@@ -206,7 +225,7 @@ export function Tour({ onClose }: { onClose: () => void }) {
       <div
         ref={cardRef}
         className={`tour-card ${centered ? "center" : ""}`}
-        style={centered ? undefined : { ...card, width: CARD_W }}
+        style={centered ? undefined : { ...card, width: phone ? undefined : CARD_W }}
         key={i}
       >
         <div className="tour-head">

@@ -324,6 +324,10 @@ small { font-size: 0.6em; color: var(--fg-lighter); font-weight: 400; }
 .field-meta p { font-size: 14px; color: var(--fg-lighter); margin-top: 3.5px; }
 .field-control { min-width: 0; }
 .field-err { display: block; font-style: normal; color: var(--red-tx); font-size: 13px; margin-top: 6.5px; }
+/* a labelled control: label, input, hint and error stacked */
+.field { display: flex; flex-direction: column; gap: 6.5px; }
+.field > span:first-child { font-size: 14.5px; font-weight: 500; }
+.field-hint { font-style: normal; font-size: 13px; color: var(--fg-lighter); }
 input, select {
   font: inherit; font-size: 15px; color: var(--fg); background: var(--control);
   border: 1px solid var(--border-strong); border-radius: var(--radius); height: 37.5px; padding: 0 11px; width: 100%; min-width: 0;
@@ -448,6 +452,8 @@ input.amount { font-size: 15.5px; height: 55px; }
 @media (max-width: 1000px) {
   .stats, .cards4 { grid-template-columns: repeat(2, 1fr); }
   .two-col { grid-template-columns: 1fr; }
+  /* tablets: the shifts submenu would leave the page a phone-width column; the breadcrumb and team page cover it */
+  .submenu { display: none; }
 }
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }
@@ -619,7 +625,7 @@ input.amount { font-size: 15.5px; height: 55px; }
   border-radius: 13px; box-shadow: 0 26.5px 66px rgba(0, 0, 0, 0.5); padding: 15.5px 15.5px 13px;
   animation: pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.2); transition: top 0.25s ease, left 0.25s ease;
 }
-.tour-card.center { top: 50%; left: 50%; width: 374px; transform: translate(-50%, -50%); animation: fade 0.2s ease-out; }
+.tour-card.center { top: 50%; left: 50%; width: min(374px, calc(100vw - 24px)); transform: translate(-50%, -50%); animation: fade 0.2s ease-out; }
 .tour-head { display: flex; align-items: center; gap: 11px; }
 .tour-head img { width: 57px; height: 57px; flex-shrink: 0; margin: -6px -2px -6px -6px; }
 .tour-card.center .tour-head { flex-direction: column; text-align: center; }
@@ -832,7 +838,7 @@ input.amount { font-size: 15.5px; height: 55px; }
 .rule-tile.no .icon { color: var(--red-tx); }
 
 @media (max-width: 1000px) {
-  .journey { grid-template-columns: repeat(5, minmax(120px, 1fr)); overflow-x: auto; padding-bottom: 4px; }
+  .journey { grid-template-columns: repeat(5, minmax(110px, 1fr)); overflow-x: auto; padding-bottom: 4px; }
   .rule-tiles { grid-template-columns: repeat(2, 1fr); }
   .form-card { grid-template-columns: 1fr; }
   .form-card-side { border-right: 0; border-bottom: 1px solid var(--border); }
@@ -841,9 +847,11 @@ input.amount { font-size: 15.5px; height: 55px; }
   .options { grid-template-columns: 1fr; }
   .next-step { flex-direction: column; align-items: flex-start; }
   .form-step-body.two { grid-template-columns: 1fr; }
-  .crew-row { grid-template-columns: auto 1fr auto; }
-  .crew-row .mono { grid-column: 1 / -1; }
-  .crew-row .role { display: none; }
+  /* avatar, name and the you-tag or remove button on one line; the wallet address under the name */
+  .crew-row { grid-template-columns: auto 1fr auto; row-gap: 6px; }
+  .crew-row + .crew-row { margin-top: 8px; }
+  .crew-row > :nth-child(4) { grid-row: 1; grid-column: 3; }
+  .crew-row .mono { grid-row: 2; grid-column: 2 / -1; }
 }
 
 /* shift steps with illustrations */
@@ -1018,4 +1026,114 @@ input.amount { font-size: 15.5px; height: 55px; }
 @media (max-width: 760px) {
   .cheat-grid { grid-template-columns: 1fr; }
   .cheat { border-right: 0; border-bottom: 1px solid var(--border-muted); }
+}
+
+/* ---------- phones: everything fits from 320px up, no sideways page scroll ---------- */
+/* phone browsers: 100vh runs under the address bar, dvh is the visible height */
+@supports (height: 100dvh) {
+  .app, .rail { height: 100dvh; }
+  .guest-shell { min-height: 100dvh; }
+}
+[data-tour] { scroll-margin-top: 14px; }
+
+@media (max-width: 760px) {
+  /* iOS zooms the page into any field set under 16px */
+  input, select, input.mono, input.amount { font-size: 16px; }
+
+  /* top bar: the signer menu opens full width under the bar instead of off the left edge */
+  .topbar .menu { position: fixed; top: 58px; left: 9px; right: 9px; min-width: 0; }
+  .toasts { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .toast { width: auto; max-width: none; }
+  /* the guide's ribbon moves to the bottom so it doesn't cover the top bar the tour points at */
+  .demo-ribbon { top: auto; bottom: calc(10px + env(safe-area-inset-bottom)); white-space: nowrap; font-size: 12px; padding: 4px 11px; }
+
+  /* panel headers: actions and links drop under the title instead of squeezing it */
+  .panel-head { flex-wrap: wrap; padding: 14px 16px; }
+  .alert { flex-wrap: wrap; }
+  .alert-body { flex: 1 1 calc(100% - 41.5px); }
+  .alert-action { margin-left: 41.5px; align-self: flex-start; }
+
+  /* journey strip: swipeable, opens on the current step (see Journey), no clipped glow */
+  .journey { grid-template-columns: repeat(5, 112px); padding: 4px 4px 6px; margin: -4px -4px 0; scrollbar-width: none; }
+  .journey::-webkit-scrollbar { display: none; }
+
+  /* overview "try it" rows: the step number sits on the picture, leaving room for the text */
+  .try-item { padding: 14px 16px; gap: 12px; }
+  .try-item .try-n { position: absolute; left: 9px; top: 9px; width: 19px; height: 19px; font-size: 11px; z-index: 1; }
+  .try-item img { width: 40px; height: 40px; }
+  .try-faces { flex-wrap: wrap; row-gap: 2px; }
+  .try-foot { padding: 10px 16px; }
+  .try-foot .spacer { flex-basis: 100%; }
+
+  /* shift summary: cells stretch so their borders line up */
+  .summary { align-items: stretch; }
+  .summary > div { padding: 12px 16px; }
+  .sum-item { gap: 10px; }
+
+  /* tabs: tighter so all four fit, and no scrollbar when they don't */
+  .tabs { padding: 0 4px; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 12px 9px 11px; gap: 5px; font-size: 13.5px; }
+  .tab-intro { flex-wrap: wrap; padding: 12px 16px; }
+  .tab-body > .qr-block { padding: 16px; }
+  .onchain { padding: 12px 16px; gap: 8px 14px; }
+
+  /* tip QR: the link and buttons take the panel width (and wrap) instead of running off it */
+  .qr-block { align-items: stretch; }
+  .qr-thumb { align-self: flex-start; }
+
+  /* the shift's team table fits four columns without sideways scrolling */
+  .grid:not(.log) { display: table; white-space: normal; }
+  .grid th, .grid td { padding-left: 8px; padding-right: 8px; }
+  .grid th:first-child, .grid td:first-child { padding-left: 14px; }
+  .grid th:last-child, .grid td:last-child { padding-right: 14px; }
+  .cell-person { gap: 7px; flex-wrap: wrap; }
+  .cell-person .icon-btn { display: none; }
+
+  /* activity log: one card per transaction (event and signer, then status and time) */
+  .grid.log, .grid.log tbody { display: block; white-space: normal; }
+  .grid.log thead { display: none; }
+  .grid.log tr {
+    display: grid; grid-template-columns: auto auto 1fr auto; align-items: center; gap: 4px 10px; padding: 10px 14px;
+    grid-template-areas: "event event signer link" "status time time link"; border-bottom: 1px solid var(--border-muted);
+  }
+  .grid.log tbody tr:last-child { border-bottom: 0; }
+  .grid.log td, .grid.log tbody tr:hover td { padding: 0; border: 0; background: none; }
+  .grid.log td:nth-child(1) { grid-area: time; font-size: 12.5px; white-space: nowrap; }
+  .grid.log td:nth-child(2) { grid-area: status; }
+  .grid.log td:nth-child(3) { grid-area: event; font-weight: 500; }
+  .grid.log td:nth-child(4) { grid-area: signer; justify-self: end; font-size: 12.5px; }
+  .grid.log td:nth-child(5) { grid-area: link; }
+
+  /* team: the open vote and the inline "propose someone" form */
+  .vote-card { padding: 14px 16px; }
+  .vote-count { flex-basis: 100%; padding-left: 42px; }
+  .action-row { padding: 14px 16px; }
+  .action-meta { min-width: 0; flex-basis: 100%; }
+  .action-control.wide { min-width: 0; flex: 1 1 100%; flex-wrap: wrap; }
+  .action-control.wide > input, .action-control.wide .name-in { flex: 1 1 100%; width: auto; }
+}
+
+@media (max-width: 420px) {
+  /* no room for a breadcrumb next to the controls; each page shows its own title */
+  .crumbs { display: none; }
+  .topbar-right { gap: 6px; }
+  .help-btn { padding: 0 9px; }
+  .signer-btn { gap: 6px; }
+  .wallet-adapter-button { padding: 0 9px; font-size: 13.5px; white-space: nowrap; }
+  .tab .icon { display: none; }
+  .page { padding: 18px 12px 80px; gap: 18px; }
+  .hero { padding: 22px 18px 18px; }
+  .hero-title { font-size: 26px; }
+  .hero-art { width: 132px; height: 132px; }
+  .guest-shell { padding: 18px 12px; }
+  .tip-card { padding: 22px 18px 18px; }
+  .amounts { gap: 7px; }
+  .amount { font-size: 17px; }
+  .qr-full { padding: 22px 16px 18px; }
+  .qr-full-steps { gap: 6px; font-size: 13px; }
+}
+
+@media (max-width: 360px) {
+  .wallet-adapter-button-start-icon { display: none; }
 }

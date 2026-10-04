@@ -1,7 +1,7 @@
 // Visual building blocks that make the flow readable at a glance: who does what (RoleTag),
 // where you are in the whole journey (Journey), and the one thing to do next (NextStep).
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ART } from "./art";
 import { Icon } from "./ui";
 
@@ -35,8 +35,18 @@ export const JOURNEY: { art: keyof typeof ART; title: string; role: Role }[] = [
 
 /** The whole life of the app in five pictures. `current` is 1-5; above 5 means everything is done. */
 export function Journey({ current }: { current: number }) {
+  const ref = useRef<HTMLOListElement>(null);
+  // On phones the strip scrolls sideways: open it on the current step, not step 1.
+  useEffect(() => {
+    const ol = ref.current;
+    const here = ol?.querySelector(".journey-step.current");
+    if (!ol || !here || ol.scrollWidth <= ol.clientWidth) return;
+    const a = ol.getBoundingClientRect();
+    const b = here.getBoundingClientRect();
+    ol.scrollLeft += b.left - a.left - (a.width - b.width) / 2;
+  }, [current]);
   return (
-    <ol className="journey" aria-label="How Jar works">
+    <ol className="journey" aria-label="How Jar works" ref={ref}>
       {JOURNEY.map((j, i) => {
         const n = i + 1;
         // current = 0: just explain the journey, nothing highlighted.
