@@ -10,6 +10,7 @@
 
 <p align="center">
   <a href="https://jar-tips.vercel.app"><img alt="Live demo" src="https://img.shields.io/badge/Live_demo-jar--tips.vercel.app-3ecf8e?style=for-the-badge"></a>
+  <a href="https://jar-tips.vercel.app/docs/"><img alt="Technical docs" src="https://img.shields.io/badge/Technical_docs-%2Fdocs-00804f?style=for-the-badge"></a>
   <a href="https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet"><img alt="Solana devnet" src="https://img.shields.io/badge/Solana-devnet-9945FF?style=for-the-badge&logo=solana&logoColor=white"></a>
   <a href="https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet"><img alt="Program is immutable" src="https://img.shields.io/badge/Program-immutable-171717?style=for-the-badge"></a>
 </p>
@@ -96,6 +97,8 @@ Prefer your own wallet? Connect Phantom or Solflare **on devnet** and you join a
 | Can someone fake their hours? | Not alone. More than half the shift must confirm the exact numbers; any edit voids earlier confirmations. | [lib.rs:246](programs/napiwek/src/lib.rs#L246), [lib.rs:291](programs/napiwek/src/lib.rs#L291) |
 | What if nobody agrees, or people vanish? | After the confirm window, anyone can trigger an equal split. The money is never stuck. | [lib.rs:273](programs/napiwek/src/lib.rs#L273) |
 | Can the rules be changed later? | No. The program is immutable: Explorer shows **Upgradeable: No**. No admin key, no pause, no fee switch. | [Explorer](https://explorer.solana.com/address/HrFcxm1y86UTdeJB7r8khiXfSKXSvf77p7S29MPj2ZSD?cluster=devnet) |
+
+The full technical write-up (every instruction and account, a line-by-line walk through `settle`, the threat model, and how to verify each claim yourself) is at **[jar-tips.vercel.app/docs](https://jar-tips.vercel.app/docs/)**.
 
 <p align="center">
   <img src="docs/images/explorer-immutable.png" alt="Solana Explorer showing the program: Executable Yes, Upgradeable No" width="480"><br>
@@ -281,6 +284,7 @@ app/scripts/e2e-devnet.ts     full flow incl. votes and outsider attacks
 app/scripts/fund.ts           fund any wallets with devnet SOL + test USDC
 app/scripts/check-tx-size.mts proves a 12-person team's transactions fit Solana's 1232-byte limit
 docs/                         submission text, demo checklist, README images
+docs-site/                    technical documentation site (VitePress), served at /docs
 ```
 
 </details>

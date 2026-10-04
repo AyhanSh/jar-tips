@@ -1,0 +1,33 @@
+/* Same green accent as the app (app/src/styles.css --brand). */
+:root {
+  --vp-c-brand-1: #00804f;
+  --vp-c-brand-2: #00965c;
+  --vp-c-brand-3: #00a868;
+  --vp-c-brand-soft: rgba(62, 207, 142, 0.14);
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #00a868 20%, #3ecf8e);
+  --vp-home-hero-image-background-image: radial-gradient(circle, rgba(62, 207, 142, 0.35) 30%, transparent 70%);
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+.dark {
+  --vp-c-brand-1: #3ecf8e;
+  --vp-c-brand-2: #34b87d;
+  --vp-c-brand-3: #2aa06c;
+  --vp-c-brand-soft: rgba(62, 207, 142, 0.16);
+}
+
+/* Compact reference tables. */
+.vp-doc table {
+  font-size: 14px;
+}
+.vp-doc td code,
+.vp-doc th code {
+  white-space: nowrap;
+}
+
+/* Mermaid diagrams scale to the column instead of overflowing on phones. */
+.vp-doc .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
