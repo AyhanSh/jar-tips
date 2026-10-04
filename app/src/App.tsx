@@ -4,7 +4,7 @@ import { useChainNow, useHashRoute } from "./hooks";
 import { useActors, type ActorId, type SendResult } from "./actors";
 import { TeamProvider, useMyTeam, useShiftTeam, useTeamData, type TeamData } from "./data";
 import { PROGRAM_ID, errorMessage, explorerAddr, explorerTx, parseKey, short, statusOf } from "./solana";
-import { Avatar, Icon, Spinner } from "./ui";
+import { Avatar, Icon, SolanaMark, Spinner } from "./ui";
 import { Tour, useTour } from "./Tour";
 import { DEMO_SHIFT, DemoMode } from "./demo";
 import Overview from "./pages/Overview";
@@ -235,7 +235,9 @@ function TopBar({ route, onMenu, browsed }: { route: string[]; onMenu: () => voi
             {c.href && i < crumbs.length - 1 ? <a href={c.href}>{c.label}</a> : <span className="crumb-here">{c.label}</span>}
           </span>
         ))}
-        <span className="badge tone-gray net-badge">devnet</span>
+        <span className="badge tone-gray net-badge" title="Running on Solana devnet">
+          <SolanaMark size={10} /> Solana devnet
+        </span>
       </nav>
       <div className="topbar-right">
         <HelpButton />

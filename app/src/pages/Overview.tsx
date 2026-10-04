@@ -5,7 +5,7 @@ import { HelpCtx, useTx } from "../App";
 import { ART } from "../art";
 import { useInterval } from "../hooks";
 import { PROGRAM_ID, balancesOf, explorerAddr, short } from "../solana";
-import { Avatar, CopyButton, ExtLink, Icon } from "../ui";
+import { Avatar, CopyButton, ExtLink, Icon, SolanaMark } from "../ui";
 import { JOURNEY, RoleTag } from "../journey";
 
 /** Two blocks: what it is (with the whole flow in one line), and how to try it. */
@@ -16,7 +16,9 @@ export default function Overview() {
       <section className="hero">
         <div className="hero-glow" />
         <div className="hero-text">
-          <span className="badge tone-green">Live on Solana devnet</span>
+          <span className="badge tone-green">
+            <SolanaMark size={10} /> Live on Solana devnet
+          </span>
           <h1 className="hero-title">Tips go straight to the team.</h1>
           <p className="hero-desc">No owner, no middleman. Guests tip into a vault only code controls, and the staff split it by hours.</p>
           <div className="row gap">
@@ -98,7 +100,52 @@ export default function Overview() {
           </span>
         </div>
       </section>
+
+      <WhySolana />
     </div>
+  );
+}
+
+/** Why the jar is a Solana program and not a database: what the chain does that an operator can't be trusted with. */
+const WHY: { icon: string; title: string; text: string }[] = [
+  { icon: "lock", title: "Custody by code", text: "Each shift's tips sit in a vault owned by a Solana program address. No private key exists for it." },
+  { icon: "shield", title: "Rules nobody can change", text: "The program is immutable: no admin key and no upgrades, not even by us." },
+  { icon: "globe", title: "Public by default", text: "Every tip, vote and payout is a Solana transaction anyone can check on Explorer." },
+  { icon: "coins", title: "Fast and cheap", text: "Confirmed in seconds, for a fraction of a cent per tip." },
+];
+
+function WhySolana() {
+  return (
+    <section className="panel why-panel">
+      <div className="panel-head">
+        <div>
+          <div className="panel-title title-art">
+            <SolanaMark size={16} /> Why it runs on Solana
+          </div>
+          <div className="panel-desc">A database needs an operator, and whoever runs it can move the money. On Solana, nobody can.</div>
+        </div>
+        <ExtLink href={explorerAddr(PROGRAM_ID)}>Program on Solana Explorer</ExtLink>
+      </div>
+      <div className="why-row">
+        {WHY.map((w) => (
+          <div className="why-item" key={w.title}>
+            <span className="why-icon">
+              <Icon name={w.icon} size={16} />
+            </span>
+            <b>{w.title}</b>
+            <span>{w.text}</span>
+          </div>
+        ))}
+      </div>
+      <div className="try-foot">
+        <span className="muted">Built with</span>
+        {["Anchor (Rust)", "SPL Token · Token-2022", "Solana Wallet Adapter", "Test USDC on devnet"].map((t) => (
+          <span className="chip" key={t}>
+            {t}
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }
 

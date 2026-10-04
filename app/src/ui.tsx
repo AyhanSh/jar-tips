@@ -1,6 +1,6 @@
 // Small shared UI pieces: icons (Lucide-style strokes), avatars, tags, properties, callouts.
 
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 const PATHS: Record<string, ReactNode> = {
   home: <path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" />,
@@ -144,6 +144,27 @@ export function Icon({ name, size = 16, className }: { name: keyof typeof PATHS 
       aria-hidden="true"
     >
       {PATHS[name]}
+    </svg>
+  );
+}
+
+/** The Solana logomark (three bars, purple to green), for "built on Solana" labels. */
+export function SolanaMark({ size = 14 }: { size?: number }) {
+  const id = "sol" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const h = Math.round(size * SCALE);
+  return (
+    <svg className="sol-mark" width={Math.round((h * 397.7) / 311.7)} height={h} viewBox="0 0 397.7 311.7" aria-label="Solana" role="img">
+      <defs>
+        <linearGradient id={id} gradientUnits="userSpaceOnUse" x1="360.9" y1="-37.5" x2="141.2" y2="383.3">
+          <stop offset="0" stopColor="#14F195" />
+          <stop offset="1" stopColor="#9945FF" />
+        </linearGradient>
+      </defs>
+      <g fill={`url(#${id})`}>
+        <path d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z" />
+        <path d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z" />
+        <path d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z" />
+      </g>
     </svg>
   );
 }
