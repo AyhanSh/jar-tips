@@ -6,7 +6,7 @@ import { SignerMenu, useTx } from "../App";
 import { useShift } from "../data";
 import { useInterval, useProgram } from "../hooks";
 import { ata, explorerTx, faucetIxs, fromUnits, isMobile, ixTip, parseKey, tipUrl, toUnits, tokenBalance, txOf, walletBrowseLinks } from "../solana";
-import { Avatar, Icon } from "../ui";
+import { Avatar, Icon, SolanaMark } from "../ui";
 import { ART } from "../art";
 
 const PRESETS = [5, 10, 20];
@@ -211,7 +211,9 @@ function TipCard({ venue, children }: { venue?: string; children: React.ReactNod
         {venue ?? "Jar"}
       </div>
       <div className="tip-card">{children}</div>
-      <div className="tip-powered muted small">Jar · Solana devnet</div>
+      <div className="tip-powered muted small">
+        <SolanaMark size={11} /> Jar · built on Solana (devnet)
+      </div>
     </div>
   );
 }

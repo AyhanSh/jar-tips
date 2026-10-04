@@ -953,7 +953,23 @@ input.amount { font-size: 15.5px; height: 55px; }
 .try-item .btn, .try-item .chip { flex-shrink: 0; }
 .try-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 18px; border-top: 1px solid var(--border-muted); background: var(--surface-75, var(--surface-200)); font-size: 14px; border-radius: 0 0 9px 9px; }
 .try-foot img { width: 26px; height: 26px; margin: -4px 0; }
+
+/* Solana: the logomark in labels, and the "why it runs on Solana" panel on the overview */
+.sol-mark { display: inline-block; flex-shrink: 0; }
+.why-row { display: grid; grid-template-columns: repeat(4, 1fr); }
+.why-item { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border-right: 1px solid var(--border-muted); }
+.why-item:last-child { border-right: 0; }
+.why-item b { font-size: 15px; font-weight: 600; margin-top: 4px; }
+.why-item > span:last-child { font-size: 13.5px; color: var(--fg-light); }
+.why-icon {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+  color: var(--purple-tx); background: var(--purple-bg); border: 1px solid var(--purple-bd);
+}
+.tip-powered { display: flex; align-items: center; justify-content: center; gap: 6px; }
 @media (max-width: 1000px) {
+  .why-row { grid-template-columns: repeat(2, 1fr); }
+  .why-item:nth-child(2) { border-right: 0; }
+  .why-item:nth-child(-n + 2) { border-bottom: 1px solid var(--border-muted); }
   .hero-flow { grid-template-columns: repeat(3, 1fr); row-gap: 14px; }
   .hero-flow-sep { display: none; }
   .try-row { grid-template-columns: 1fr; }
@@ -962,6 +978,9 @@ input.amount { font-size: 15.5px; height: 55px; }
 @media (max-width: 760px) {
   .hero { grid-template-columns: 1fr; }
   .hero-flow { grid-template-columns: 1fr 1fr; }
+  .why-row { grid-template-columns: 1fr; }
+  .why-item { border-right: 0; border-bottom: 1px solid var(--border-muted); }
+  .why-item:last-child { border-bottom: 0; }
 }
 
 /* ---------- team: members and the open vote ---------- */
